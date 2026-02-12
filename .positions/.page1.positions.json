@@ -1,0 +1,184 @@
+{
+  "addEquipmentButton": {
+    "row": 0.4,
+    "col": 10,
+    "height": 1,
+    "width": 2
+  },
+  "addEquipmentTitle": {
+    "rowGroup": "header",
+    "subcontainer": "addEquipmentModal",
+    "height": 4.8,
+    "width": 12
+  },
+  "assetNumberInput": {
+    "subcontainer": "addEquipmentModal",
+    "row": 1.2,
+    "height": 8.6,
+    "width": 12
+  },
+  "assignedNameInput": {
+    "subcontainer": "addEquipmentModal",
+    "row": 3.6,
+    "height": 5.8,
+    "width": 12
+  },
+  "calibrationSelect": {
+    "subcontainer": "addEquipmentModal",
+    "row": 4.8,
+    "height": 0.2,
+    "width": 12
+  },
+  "cancelAddButton": {
+    "rowGroup": "footer",
+    "subcontainer": "addEquipmentModal",
+    "height": 1,
+    "width": 4
+  },
+  "cancelEditButton": {
+    "rowGroup": "footer",
+    "subcontainer": "editEquipmentModal",
+    "height": 1,
+    "width": 4
+  },
+  "editAssetNumberInput": {
+    "subcontainer": "editEquipmentModal",
+    "row": 1.2,
+    "height": 5.8,
+    "width": 12
+  },
+  "editAssignedNameInput": {
+    "subcontainer": "editEquipmentModal",
+    "row": 3.6,
+    "height": 5.8,
+    "width": 12
+  },
+  "editCalibrationSelect": {
+    "subcontainer": "editEquipmentModal",
+    "row": 4.8,
+    "height": 0.2,
+    "width": 12
+  },
+  "editEmployeeNumberInput": {
+    "subcontainer": "editEquipmentModal",
+    "row": 4.2,
+    "height": 3,
+    "width": 12
+  },
+  "editEquipmentTitle": {
+    "rowGroup": "header",
+    "subcontainer": "editEquipmentModal",
+    "height": 3.6,
+    "width": 12
+  },
+  "editEquipmentTypeSelect": {
+    "subcontainer": "editEquipmentModal",
+    "height": 5.8,
+    "width": 12
+  },
+  "editFirmwareInput": {
+    "subcontainer": "editEquipmentModal",
+    "row": 3,
+    "height": 5.8,
+    "width": 12
+  },
+  "editItemNameInput": {
+    "subcontainer": "editEquipmentModal",
+    "row": 0.6,
+    "height": 5.8,
+    "width": 12
+  },
+  "editPartNumberInput": {
+    "subcontainer": "editEquipmentModal",
+    "row": 1.8,
+    "height": 5.8,
+    "width": 12
+  },
+  "editSerialNumberInput": {
+    "subcontainer": "editEquipmentModal",
+    "row": 2.4,
+    "height": 5.8,
+    "width": 12
+  },
+  "employeeNumberInput": {
+    "subcontainer": "addEquipmentModal",
+    "row": 4.2,
+    "height": 5.8,
+    "width": 12
+  },
+  "equipmentTable": {
+    "container": "equipmentTableContainer",
+    "subcontainer": "00030",
+    "height": 10,
+    "width": 12,
+    "stackPosition": {
+      "object": {
+        "ordinal": 0,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "equipmentTableContainer": {
+    "row": 2,
+    "height": 5.2,
+    "width": 12,
+    "stackPosition": {
+      "object": {
+        "ordinal": 0,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "equipmentTypeSelect": {
+    "subcontainer": "addEquipmentModal",
+    "height": 8.6,
+    "width": 12
+  },
+  "firmwareInput": {
+    "subcontainer": "addEquipmentModal",
+    "row": 3,
+    "height": 5.8,
+    "width": 12
+  },
+  "itemNameInput": {
+    "subcontainer": "addEquipmentModal",
+    "row": 0.6,
+    "height": 8.6,
+    "width": 12
+  },
+  "pageTitleText": {
+    "row": 0.4,
+    "height": 1.2,
+    "width": 8
+  },
+  "partNumberInput": {
+    "subcontainer": "addEquipmentModal",
+    "row": 1.8,
+    "height": 8.6,
+    "width": 12
+  },
+  "saveEquipmentButton": {
+    "rowGroup": "footer",
+    "subcontainer": "addEquipmentModal",
+    "col": 8,
+    "height": 1,
+    "width": 4
+  },
+  "serialNumberInput": {
+    "subcontainer": "addEquipmentModal",
+    "row": 2.4,
+    "height": 5.8,
+    "width": 12
+  },
+  "updateEquipmentButton": {
+    "rowGroup": "footer",
+    "subcontainer": "editEquipmentModal",
+    "col": 8,
+    "height": 1,
+    "width": 4
+  }
+}

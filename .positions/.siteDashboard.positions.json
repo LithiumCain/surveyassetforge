@@ -1,0 +1,223 @@
+{
+  "calibIcon1": {
+    "container": "kpiContainer",
+    "subcontainer": "00030",
+    "col": 2,
+    "height": 1.8,
+    "width": 1,
+    "stackPosition": {
+      "object": {
+        "ordinal": 3,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "calibIcon2": {
+    "container": "kpiContainer",
+    "subcontainer": "00030",
+    "col": 5,
+    "height": 1.8,
+    "width": 1,
+    "stackPosition": {
+      "object": {
+        "ordinal": 2,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "calibIcon3": {
+    "container": "kpiContainer",
+    "subcontainer": "00030",
+    "col": 8,
+    "height": 1.8,
+    "width": 1,
+    "stackPosition": {
+      "object": {
+        "ordinal": 1,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "calibIcon4": {
+    "container": "kpiContainer",
+    "subcontainer": "00030",
+    "col": 11,
+    "height": 1.8,
+    "width": 1,
+    "stackPosition": {
+      "object": {
+        "ordinal": 0,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "calibrationStatusFilter": {
+    "container": "filterContainer2",
+    "subcontainer": "00030",
+    "col": 4,
+    "height": 4.4,
+    "width": 4,
+    "stackPosition": {
+      "object": {
+        "ordinal": 1,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "calibrationTrackingTable": {
+    "container": "equipmentTableContainer3",
+    "subcontainer": "00030",
+    "height": 10,
+    "width": 12,
+    "stackPosition": {
+      "object": {
+        "ordinal": 0,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "clearFiltersButton2": {
+    "container": "filterContainer2",
+    "subcontainer": "00030",
+    "row": 0.6,
+    "col": 10,
+    "height": 1,
+    "width": 2,
+    "stackPosition": {
+      "object": {
+        "ordinal": 2,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "criticalCalibrationStat": {
+    "container": "kpiContainer",
+    "subcontainer": "00030",
+    "row": 1.8,
+    "col": 6,
+    "height": 3,
+    "stackPosition": {
+      "object": {
+        "ordinal": 4,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "dashboardTitle2": {
+    "row": 1,
+    "height": 4.2,
+    "width": 12
+  },
+  "equipmentTableContainer3": {
+    "row": 12.4,
+    "height": 12.8,
+    "width": 12,
+    "stackPosition": {
+      "object": {
+        "ordinal": 0,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "equipmentTypeFilter": {
+    "container": "filterContainer2",
+    "subcontainer": "00030",
+    "height": 4.4,
+    "width": 4,
+    "stackPosition": {
+      "object": {
+        "ordinal": 0,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "filterContainer2": {
+    "row": 1.6,
+    "height": 2.4,
+    "width": 12
+  },
+  "goodCalibrationStat": {
+    "container": "kpiContainer",
+    "subcontainer": "00030",
+    "row": 1.8,
+    "height": 6.2,
+    "stackPosition": {
+      "object": {
+        "ordinal": 6,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "kpiContainer": {
+    "row": 4.8,
+    "height": 7.6,
+    "width": 12,
+    "stackPosition": {
+      "object": {
+        "ordinal": 0,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "tableHeaderText2": {
+    "container": "equipmentTableContainer3",
+    "rowGroup": "header",
+    "subcontainer": "00030",
+    "height": 2.4,
+    "width": 12
+  },
+  "urgentCalibrationStat": {
+    "container": "kpiContainer",
+    "subcontainer": "00030",
+    "row": 1.8,
+    "col": 9,
+    "height": 3,
+    "stackPosition": {
+      "object": {
+        "ordinal": 5,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  },
+  "warningCalibrationStat": {
+    "container": "kpiContainer",
+    "subcontainer": "00030",
+    "row": 1.8,
+    "col": 3,
+    "height": 6.2,
+    "stackPosition": {
+      "object": {
+        "ordinal": 7,
+        "widthType": "fixed",
+        "width": 0,
+        "height": 0
+      }
+    }
+  }
+}

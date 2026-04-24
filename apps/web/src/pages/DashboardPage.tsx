@@ -13,7 +13,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
   const [sites, setSites] = useState<Site[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(
-    user.role === 'field_user' ? user.siteId : null,
+    user.role === 'site_supervisor' ? user.siteId : null,
   );
   const [siteSearchTerm, setSiteSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -159,7 +159,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
   }, []);
 
   useEffect(() => {
-    if (user.role === 'field_user') {
+    if (user.role === 'site_supervisor') {
       setSelectedSiteId(user.siteId);
       return;
     }
@@ -263,7 +263,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
       <header className="topbar card">
         <div>
           <h1>FieldOps Dashboard</h1>
-          <p>{user.fullName} ({user.role})</p>
+          <p>{user.username} ({user.role})</p>
           <p className="subtle">Viewing: {selectedSiteName}</p>
         </div>
         <button onClick={onLogout}>Sign Out</button>
@@ -355,7 +355,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
         )}
       </section>
 
-      {(user.role === 'admin' || user.role === 'field_user') && (
+      {(user.role === 'super_admin' || user.role === 'site_supervisor') && (
         <section className="actions card">
           <button onClick={() => { setEditing(undefined); setFormOpen(true); }}>Add Asset</button>
           {error && <p className="error">{error}</p>}

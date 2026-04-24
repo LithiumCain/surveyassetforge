@@ -24,3 +24,5 @@ app.use('/api/v1', siteRoutes);
 app.use('/api/v1', assetRoutes);
 
 app.use(errorHandler);
+
+export default app;

@@ -151,7 +151,7 @@ assetRoutes.get('/assets', async (req, res, next) => {
     const params: unknown[] = [];
     let where = '';
 
-    if (req.user!.role !== 'admin') {
+    if (req.user!.role !== 'super_admin') {
       params.push(req.user!.siteId);
       where = ` WHERE a.site_id = $${params.length}`;
     }
@@ -172,7 +172,7 @@ assetRoutes.get('/assets/:id', async (req, res, next) => {
       return res.status(404).json({ message: 'Asset not found' });
     }
 
-    if (req.user!.role !== 'admin' && row.site_id !== req.user!.siteId) {
+    if (req.user!.role !== 'super_admin' && row.site_id !== req.user!.siteId) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
@@ -182,7 +182,7 @@ assetRoutes.get('/assets/:id', async (req, res, next) => {
   }
 });
 
-assetRoutes.post('/assets', authorize('admin', 'field_user'), async (req, res, next) => {
+assetRoutes.post('/assets', authorize('super_admin', 'site_supervisor'), async (req, res, next) => {
   try {
     const parsed = assetSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -190,7 +190,7 @@ assetRoutes.post('/assets', authorize('admin', 'field_user'), async (req, res, n
     }
 
     const data = parsed.data;
-    if (req.user!.role === 'field_user' && data.siteId !== req.user!.siteId) {
+    if (req.user!.role === 'site_supervisor' && data.siteId !== req.user!.siteId) {
       return res.status(403).json({ message: 'Field users can only create assets in their site' });
     }
 
@@ -250,7 +250,7 @@ assetRoutes.post('/assets', authorize('admin', 'field_user'), async (req, res, n
   }
 });
 
-assetRoutes.put('/assets/:id', authorize('admin', 'field_user'), async (req, res, next) => {
+assetRoutes.put('/assets/:id', authorize('super_admin', 'site_supervisor'), async (req, res, next) => {
   try {
     const parsed = assetSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -264,11 +264,11 @@ assetRoutes.put('/assets/:id', authorize('admin', 'field_user'), async (req, res
     }
 
     const data = parsed.data;
-    if (req.user!.role === 'field_user' && row.site_id !== req.user!.siteId) {
+    if (req.user!.role === 'site_supervisor' && row.site_id !== req.user!.siteId) {
       return res.status(403).json({ message: 'Field users can only update assets in their site' });
     }
 
-    if (req.user!.role === 'field_user' && data.siteId !== req.user!.siteId) {
+    if (req.user!.role === 'site_supervisor' && data.siteId !== req.user!.siteId) {
       return res.status(403).json({ message: 'Field users cannot move assets to another site' });
     }
 
@@ -345,7 +345,7 @@ assetRoutes.put('/assets/:id', authorize('admin', 'field_user'), async (req, res
   }
 });
 
-assetRoutes.delete('/assets/:id', authorize('admin'), async (req, res, next) => {
+assetRoutes.delete('/assets/:id', authorize('super_admin'), async (req, res, next) => {
   try {
     const result = await query('DELETE FROM assets WHERE id = $1', [req.params.id]);
     if (result.rowCount === 0) {
@@ -357,7 +357,7 @@ assetRoutes.delete('/assets/:id', authorize('admin'), async (req, res, next) => 
   }
 });
 
-assetRoutes.post('/scan/asset', authorize('admin', 'field_user'), async (req, res, next) => {
+assetRoutes.post('/scan/asset', authorize('super_admin', 'site_supervisor'), async (req, res, next) => {
   try {
     const parsed = scanSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -374,7 +374,7 @@ assetRoutes.post('/scan/asset', authorize('admin', 'field_user'), async (req, re
       return res.status(404).json({ message: 'Asset not found' });
     }
 
-    if (req.user!.role !== 'admin' && row.site_id !== req.user!.siteId) {
+    if (req.user!.role !== 'super_admin' && row.site_id !== req.user!.siteId) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 

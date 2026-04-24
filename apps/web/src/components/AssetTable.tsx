@@ -57,12 +57,11 @@ export const AssetTable = ({ assets, user, onEdit, onDelete }: Props) => {
               <td>${Number(asset.currentValue ?? 0).toLocaleString()}</td>
               <td>
                 <div className="row-actions">
-                  {user.role !== 'viewer' && (
-                    <button
-                      className="icon-action edit"
-                      onClick={() => onEdit(asset)}
-                      type="button"
-                      aria-label={`Edit ${asset.assetNumber}`}
+                  <button
+                    className="icon-action edit"
+                    onClick={() => onEdit(asset)}
+                    type="button"
+                    aria-label={`Edit ${asset.assetNumber}`}
                       title="Edit asset"
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -83,8 +82,7 @@ export const AssetTable = ({ assets, user, onEdit, onDelete }: Props) => {
                         />
                       </svg>
                     </button>
-                  )}
-                  {user.role === 'admin' && (
+                  {user.role === 'super_admin' && (
                     <button
                       className="icon-action delete"
                       onClick={() => onDelete(asset)}

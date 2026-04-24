@@ -12,8 +12,6 @@ const loginSchema = z.object({
 
 export const authRoutes = Router();
 
-export const authRoutes = Router();
-
 authRoutes.post('/login', async (req, res, next) => {
   try {
     const parsed = loginSchema.safeParse(req.body);

@@ -20,7 +20,7 @@ export const AssetForm = ({ sites, user, initial, onSubmit, onCancel }: Props) =
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const defaultSiteId = user.role === 'field_user' ? user.siteId ?? '' : sites[0]?.id ?? '';
+  const defaultSiteId = user.role === 'site_supervisor' ? user.siteId ?? '' : sites[0]?.id ?? '';
 
   const [form, setForm] = useState({
     assetNumber: initial?.assetNumber ?? '',
@@ -50,7 +50,7 @@ export const AssetForm = ({ sites, user, initial, onSubmit, onCancel }: Props) =
   });
 
   const siteOptions = useMemo(() => {
-    if (user.role === 'field_user') {
+    if (user.role === 'site_supervisor') {
       return sites.filter((site) => site.id === user.siteId);
     }
     return sites;
@@ -104,7 +104,7 @@ export const AssetForm = ({ sites, user, initial, onSubmit, onCancel }: Props) =
       <label>Item Name<input required value={form.itemName} onChange={(e) => setForm({ ...form, itemName: e.target.value })} /></label>
       <label>Manufacturer<input value={form.manufacturer} onChange={(e) => setForm({ ...form, manufacturer: e.target.value })} /></label>
       <label>Equipment Type<input required value={form.equipmentType} onChange={(e) => setForm({ ...form, equipmentType: e.target.value })} /></label>
-      <label>Site<select required value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value })} disabled={user.role === 'field_user'}>{siteOptions.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
+      <label>Site<select required value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value })} disabled={user.role === 'site_supervisor'}>{siteOptions.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
       <label>Ownership<select value={form.ownership} onChange={(e) => setForm({ ...form, ownership: e.target.value as AssetPayload['ownership'] })}><option value="unknown">Unknown</option><option value="owned">Owned</option><option value="rental">Rental</option><option value="rpo">RPO</option></select></label>
       <label>Part Number<input value={form.partNumber} onChange={(e) => setForm({ ...form, partNumber: e.target.value })} /></label>
       <label>Serial Number<input value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} /></label>

@@ -285,7 +285,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
               placeholder="Search Sites"
             />
           </label>
-          {user.role !== 'field_user' && (
+          {user.role !== 'site_supervisor' && (
             <label className="location-select">
               <span>Filter by Site</span>
               <select

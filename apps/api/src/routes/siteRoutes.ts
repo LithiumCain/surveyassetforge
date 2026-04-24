@@ -11,8 +11,6 @@ const createSiteSchema = z.object({
 
 export const siteRoutes = Router();
 
-export const siteRoutes = Router();
-
 siteRoutes.get('/sites', authenticate, async (req, res, next) => {
   try {
     let sites;
@@ -52,5 +50,4 @@ siteRoutes.post('/sites', authenticate, authorize('super_admin'), async (req, re
   } catch (err) {
     next(err);
   }
-});
 });

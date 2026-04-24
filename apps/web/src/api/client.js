@@ -25,10 +25,10 @@ class ApiClient {
         }
         return response.json();
     }
-    login(email, password) {
+    login(username, password) {
         return this.request('/login', {
             method: 'POST',
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({ username, password }),
         });
     }
     getMe() {

@@ -24,8 +24,8 @@ export const App = () => {
         })
             .finally(() => setBooting(false));
     }, [token]);
-    const handleLogin = async (email, password) => {
-        const response = await apiClient.login(email, password);
+    const handleLogin = async (username, password) => {
+        const response = await apiClient.login(username, password);
         apiClient.setToken(response.token);
         localStorage.setItem(tokenStorageKey, response.token);
         setToken(response.token);

@@ -1,10 +1,13 @@
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
+import { PrismaClient } from '@prisma/client';
 import { errorHandler } from './middleware/errorHandler.js';
 import { assetRoutes } from './routes/assetRoutes.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { siteRoutes } from './routes/siteRoutes.js';
+
+export const prisma = new PrismaClient();
 
 export const app = express();
 

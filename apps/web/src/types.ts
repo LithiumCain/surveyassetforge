@@ -1,9 +1,9 @@
-export type UserRole = 'admin' | 'field_user' | 'viewer';
+export type UserRole = 'super_admin' | 'regional_director' | 'site_supervisor';
 
 export type User = {
   id: string;
-  email: string;
-  fullName: string;
+  username: string;
+  email: string | null;
   role: UserRole;
   siteId: string | null;
 };

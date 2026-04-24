@@ -1,0 +1,67 @@
+// =========================
+// DATABASE + CLIENT CONFIG
+// =========================
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// =========================
+// ENUMS
+// =========================
+
+enum Role {
+  super_admin
+  regional_director
+  site_supervisor
+}
+
+// =========================
+// MODELS
+// =========================
+
+model Site {
+  id               String    @id @default(uuid())
+  code             String    @unique   // EXACT string from Excel, e.g. "0273_Armadillo"
+  name             String              // same as code, stored redundantly on purpose
+  tempPasswordHash String?             // hashed temp password for first login
+  createdAt        DateTime  @default(now())
+
+  users            User[]
+  auditLogs        AuditLog[]
+}
+
+model User {
+  id             String    @id @default(uuid())
+  firstName      String?
+  lastName       String?
+  username       String    @unique        // generated: zstevens, jsmith2, etc.
+  email          String?                  // optional real email
+  internalEmail  String    @unique        // <username>@surveyassetforge.local
+  passwordHash   String
+  role           Role
+  siteId         String?                  // null for admins + regional directors
+  site           Site?     @relation(fields: [siteId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  auditLogs      AuditLog[]
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  siteId    String
+  action    String
+  field     String?
+  oldValue  String?
+  newValue  String?
+  timestamp DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id])
+  site      Site @relation(fields: [siteId], references: [id])
+}

@@ -33,10 +33,10 @@ class ApiClient {
     return response.json() as Promise<T>;
   }
 
-  login(email: string, password: string): Promise<{ token: string; user: User }> {
+  login(username: string, password: string): Promise<{ token: string; user: User }> {
     return this.request('/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
     });
   }
 

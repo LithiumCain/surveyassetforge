@@ -16,5 +16,8 @@
     "dev:stack": "npm run db:up && npm run db:migrate && npm run dev",
     "build": "npm run build -w @hartsystem/api && npm run build -w @hartsystem/web",
     "lint": "npm run lint -w @hartsystem/api && npm run lint -w @hartsystem/web"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.8.0"
   }
 }

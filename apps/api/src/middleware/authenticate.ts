@@ -24,7 +24,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
       id: payload.sub,
       role: payload.role,
       siteId: payload.siteId,
-      email: payload.email,
+      username: payload.username,
     };
     next();
   } catch (_err) {

@@ -1,15 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { query } from '../config/db.js';
+import { prisma } from '../app.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
-
-type SiteRow = {
-  id: string;
-  name: string;
-  code: string;
-  created_at: string;
-};
 
 const createSiteSchema = z.object({
   name: z.string().min(2),
@@ -18,18 +11,29 @@ const createSiteSchema = z.object({
 
 export const siteRoutes = Router();
 
-siteRoutes.get('/sites', authenticate, async (_req, res, next) => {
+export const siteRoutes = Router();
+
+siteRoutes.get('/sites', authenticate, async (req, res, next) => {
   try {
-    const result = await query<SiteRow>(
-      'SELECT id, name, code, created_at FROM sites ORDER BY name ASC',
-    );
-    res.json(result.rows);
+    let sites;
+    if (req.user!.role === 'super_admin' || req.user!.role === 'regional_director') {
+      sites = await prisma.site.findMany({
+        orderBy: { name: 'asc' },
+      });
+    } else if (req.user!.role === 'site_supervisor' && req.user!.siteId) {
+      sites = await prisma.site.findMany({
+        where: { id: req.user!.siteId },
+      });
+    } else {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    res.json(sites);
   } catch (err) {
     next(err);
   }
 });
 
-siteRoutes.post('/sites', authenticate, authorize('admin'), async (req, res, next) => {
+siteRoutes.post('/sites', authenticate, authorize('super_admin'), async (req, res, next) => {
   try {
     const parsed = createSiteSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -37,15 +41,16 @@ siteRoutes.post('/sites', authenticate, authorize('admin'), async (req, res, nex
     }
 
     const { name, code } = parsed.data;
-    const result = await query<SiteRow>(
-      `INSERT INTO sites (name, code)
-       VALUES ($1, $2)
-       RETURNING id, name, code, created_at`,
-      [name, code.toUpperCase()],
-    );
+    const site = await prisma.site.create({
+      data: {
+        name,
+        code: code.toUpperCase(),
+      },
+    });
 
-    return res.status(201).json(result.rows[0]);
+    return res.status(201).json(site);
   } catch (err) {
     next(err);
   }
+});
 });

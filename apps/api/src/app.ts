@@ -1,13 +1,17 @@
+import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { errorHandler } from './middleware/errorHandler.js';
 import { assetRoutes } from './routes/assetRoutes.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { siteRoutes } from './routes/siteRoutes.js';
 
-export const prisma = new PrismaClient();
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 export const app = express();
 

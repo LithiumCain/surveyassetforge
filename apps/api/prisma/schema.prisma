@@ -4,7 +4,6 @@
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -27,30 +26,34 @@ enum Role {
 
 model Site {
   id               String    @id @default(uuid())
-  code             String    @unique   // EXACT string from Excel, e.g. "0273_Armadillo"
-  name             String              // same as code, stored redundantly on purpose
-  tempPasswordHash String?             // hashed temp password for first login
+  code             String    @unique
+  name             String
+  tempPasswordHash String?
   createdAt        DateTime  @default(now())
 
   users            User[]
   auditLogs        AuditLog[]
+
+  @@map("sites")
 }
 
 model User {
   id             String    @id @default(uuid())
   firstName      String?
   lastName       String?
-  username       String    @unique        // generated: zstevens, jsmith2, etc.
-  email          String?                  // optional real email
-  internalEmail  String    @unique        // <username>@surveyassetforge.local
+  username       String    @unique
+  email          String?
+  internalEmail  String    @unique
   passwordHash   String
   role           Role
-  siteId         String?                  // null for admins + regional directors
+  siteId         String?
   site           Site?     @relation(fields: [siteId], references: [id])
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   auditLogs      AuditLog[]
+
+  @@map("users")
 }
 
 model AuditLog {
@@ -65,4 +68,6 @@ model AuditLog {
 
   user      User @relation(fields: [userId], references: [id])
   site      Site @relation(fields: [siteId], references: [id])
+
+  @@map("audit_logs")
 }

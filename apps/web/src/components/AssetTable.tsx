@@ -35,7 +35,9 @@ export const AssetTable = ({ assets, user, onEdit, onDelete }: Props) => {
         <tbody>
           {assets.length === 0 && (
             <tr>
-              <td colSpan={15}>No assets found for this location.</td>
+              <td colSpan={16} style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px' }}>
+                No assets found for this location.
+              </td>
             </tr>
           )}
           {assets.map((asset) => (

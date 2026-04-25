@@ -14,7 +14,6 @@ export const LoginPage = ({ onLogin }: Props) => {
     event.preventDefault();
     setLoading(true);
     setError(null);
-
     try {
       await onLogin(username, password);
     } catch (err) {
@@ -25,14 +24,47 @@ export const LoginPage = ({ onLogin }: Props) => {
   };
 
   return (
-    <main className="layout center">
-      <form className="card login" onSubmit={submit}>
-        <h1>FieldOps Asset Dashboard</h1>
-        <p>Sign in with your assigned account.</p>
+    <main className="login-page center">
+      <form className="login card" onSubmit={submit}>
+        <div className="login-brand">
+          <div className="topbar-logo">SAF</div>
+          <div>
+            <h2>SurveyAssetForge</h2>
+            <p>Field Operations Asset Management</p>
+          </div>
+        </div>
+
+        <div className="login-divider" />
+
         {error && <p className="error">{error}</p>}
-        <label>Username<input type="text" required value={username} onChange={(e) => setUsername(e.target.value)} /></label>
-        <label>Password<input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-        <button type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</button>
+
+        <label className="field-label">
+          <span>Username</span>
+          <input
+            type="text"
+            required
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+        </label>
+
+        <label className="field-label">
+          <span>Password</span>
+          <input
+            type="password"
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </label>
+
+        <button type="submit" disabled={loading} className="login-btn">
+          {loading ? 'Signing in…' : 'Sign In'}
+        </button>
+
+        <p className="login-footer">Qcells USA · Midwest Survey Operations</p>
       </form>
     </main>
   );

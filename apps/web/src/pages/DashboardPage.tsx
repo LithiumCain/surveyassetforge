@@ -380,12 +380,6 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
         )}
       </section>
 
-      {(user.role === 'super_admin' || user.role === 'site_supervisor') && (
-        <section className="actions card">
-          <button onClick={() => { setEditing(undefined); setFormOpen(true); }}>Add Asset</button>
-          {error && <p className="error">{error}</p>}
-        </section>
-      )}
 
       {deleteCandidate && (
         <section className="card confirm-strip">
@@ -419,24 +413,30 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
         <div className="section-heading">
           <div>
             <h3>Assets</h3>
-            <p>{filteredAssets.length} results in the current location view.</p>
+            <p>{filteredAssets.length} result{filteredAssets.length !== 1 ? 's' : ''} in the current view.</p>
           </div>
-          <label className="location-select">
-            <span>Sort Assets</span>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-              <option value="assetNumberAsc">Asset # A-Z</option>
-              <option value="assetNumberDesc">Asset # Z-A</option>
-              <option value="itemNameAsc">Item A-Z</option>
-              <option value="itemNameDesc">Item Z-A</option>
-              <option value="statusAsc">Status</option>
-              <option value="siteNameAsc">Site A-Z</option>
-              <option value="costDesc">Cost High-Low</option>
-              <option value="costAsc">Cost Low-High</option>
-              <option value="currentValueDesc">Current Value High-Low</option>
-              <option value="currentValueAsc">Current Value Low-High</option>
-            </select>
-          </label>
+          <div className="asset-toolbar-actions">
+            <label className="location-select">
+              <span>Sort By</span>
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                <option value="assetNumberAsc">Asset # A–Z</option>
+                <option value="assetNumberDesc">Asset # Z–A</option>
+                <option value="itemNameAsc">Item A–Z</option>
+                <option value="itemNameDesc">Item Z–A</option>
+                <option value="statusAsc">Status</option>
+                <option value="siteNameAsc">Site A–Z</option>
+                <option value="costDesc">Cost: High–Low</option>
+                <option value="costAsc">Cost: Low–High</option>
+                <option value="currentValueDesc">Value: High–Low</option>
+                <option value="currentValueAsc">Value: Low–High</option>
+              </select>
+            </label>
+            {(user.role === 'super_admin' || user.role === 'site_supervisor') && (
+              <button onClick={() => { setEditing(undefined); setFormOpen(true); }}>+ Add Asset</button>
+            )}
+          </div>
         </div>
+        {error && <p className="error" style={{ marginTop: 8 }}>{error}</p>}
       </section>
 
       <div ref={formAnchorRef} />

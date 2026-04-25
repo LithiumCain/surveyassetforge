@@ -123,7 +123,7 @@ export const AssetForm = ({ sites, user, initial, onSubmit, onCancel }: Props) =
       <label>Acquired Date<input type="date" value={form.acquiredDate} onChange={(e) => setForm({ ...form, acquiredDate: e.target.value })} /></label>
 
       <div className="actions">
-        <button type="button" onClick={onCancel}>Cancel</button>
+        <button type="button" className="secondary-button" onClick={onCancel}>Cancel</button>
         <button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save Asset'}</button>
       </div>
     </form>

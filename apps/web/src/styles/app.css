@@ -436,6 +436,13 @@ td:first-child { font-weight: 600; color: var(--primary); font-size: 12px; }
 
 .asset-toolbar { display: grid; gap: 12px; }
 
+.asset-toolbar-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 
 /* ================================================================
    ACTIONS SECTION
@@ -523,6 +530,25 @@ td:first-child { font-weight: 600; color: var(--primary); font-size: 12px; }
   grid-column: 1 / -1;
 }
 
+.form-grid label,
+.field-label {
+  display: grid;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.form-grid label input,
+.form-grid label select,
+.field-label input,
+.field-label select {
+  margin-top: 0;
+  font-size: 14px;
+}
+
 
 /* ================================================================
    ERROR
@@ -542,11 +568,58 @@ td:first-child { font-weight: 600; color: var(--primary); font-size: 12px; }
    LOGIN
    ================================================================ */
 
+.login-page {
+  min-height: 100vh;
+  background: linear-gradient(150deg, #001060 0%, #001c77 40%, #013a8c 70%, #005f8a 100%);
+}
+
 .login {
-  max-width: 380px;
+  max-width: 420px;
   width: 100%;
   display: grid;
+  gap: 16px;
+  padding: 32px 28px;
+  box-shadow: var(--shadow-lg);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
   gap: 14px;
+}
+
+.login-brand h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 3px;
+  color: var(--primary);
+}
+
+.login-brand p {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.login-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 2px 0;
+}
+
+.login-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-radius: 10px;
+}
+
+.login-footer {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
 }
 
 
@@ -723,6 +796,12 @@ td:first-child { font-weight: 600; color: var(--primary); font-size: 12px; }
   }
 
   .alert-grid { grid-template-columns: 1fr; }
+
+  .asset-toolbar-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
 
   .site-issue-row {
     flex-direction: column;

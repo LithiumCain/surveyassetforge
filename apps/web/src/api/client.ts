@@ -1,4 +1,4 @@
-import { Asset, AssetPayload, Site, User } from '../types';
+import { Asset, AssetPayload, CreateSitePayload, Site, User } from '../types';
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000/api/v1';
 
@@ -46,6 +46,13 @@ class ApiClient {
 
   getSites(): Promise<Site[]> {
     return this.request('/sites');
+  }
+
+  createSite(payload: CreateSitePayload): Promise<Site> {
+    return this.request('/sites', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   getAssets(): Promise<Asset[]> {

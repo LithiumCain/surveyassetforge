@@ -12,6 +12,15 @@ export type Site = {
   id: string;
   name: string;
   code: string;
+  city: string | null;
+  state: string | null;
+};
+
+export type CreateSitePayload = {
+  code: string;
+  name: string;
+  city: string | null;
+  state: string | null;
 };
 
 export type AssetOwnership = 'owned' | 'rental' | 'rpo' | 'unknown';

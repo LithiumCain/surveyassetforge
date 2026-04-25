@@ -151,7 +151,7 @@ assetRoutes.get('/assets', async (req, res, next) => {
     const params: unknown[] = [];
     let where = '';
 
-    if (req.user!.role !== 'super_admin') {
+    if (req.user!.role !== 'super_admin' && req.user!.role !== 'regional_director') {
       params.push(req.user!.siteId);
       where = ` WHERE a.site_id = $${params.length}`;
     }

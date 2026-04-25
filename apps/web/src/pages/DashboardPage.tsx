@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { AssetForm } from '../components/AssetForm';
 import { AssetTable } from '../components/AssetTable';
+import { CreateSiteModal } from '../components/CreateSiteModal';
+import { RegionalAlerts } from '../components/RegionalAlerts';
 import { Asset, AssetPayload, Site, User } from '../types';
 
 type Props = {
@@ -28,6 +30,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
   const [deleteCandidate, setDeleteCandidate] = useState<Asset | null>(null);
   const [pendingUndoDelete, setPendingUndoDelete] = useState<Asset | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [createSiteOpen, setCreateSiteOpen] = useState(false);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const formAnchorRef = useRef<HTMLDivElement | null>(null);
 
@@ -258,16 +261,35 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
     }
   };
 
+  const roleLabel: Record<string, string> = {
+    super_admin: 'Super Admin',
+    regional_director: 'Regional Director',
+    site_supervisor: 'Site Supervisor',
+  };
+
   return (
     <main className="layout">
-      <header className="topbar card">
-        <div>
-          <h1>FieldOps Dashboard</h1>
-          <p>{user.username} ({user.role})</p>
-          <p className="subtle">Viewing: {selectedSiteName}</p>
+      <header className="topbar">
+        <div className="topbar-brand">
+          <div className="topbar-logo">SAF</div>
+          <div>
+            <h1>SurveyAssetForge</h1>
+            <p>{user.username} · {roleLabel[user.role] ?? user.role}</p>
+          </div>
         </div>
-        <button onClick={onLogout}>Sign Out</button>
+        <div className="topbar-right">
+          <span className="topbar-viewing">Viewing: {selectedSiteName}</span>
+          <button onClick={onLogout}>Sign Out</button>
+        </div>
       </header>
+
+      {(user.role === 'super_admin' || user.role === 'regional_director') && (
+        <RegionalAlerts
+          assets={assets}
+          sites={sites}
+          onAddSite={() => setCreateSiteOpen(true)}
+        />
+      )}
 
       <section className="card location-nav">
         <div className="section-heading">
@@ -275,6 +297,9 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
             <h3>Locations</h3>
             <p>Break down workbook-backed assets by site.</p>
           </div>
+          {user.role === 'site_supervisor' && (
+            <button onClick={() => setCreateSiteOpen(true)}>+ Add Site</button>
+          )}
         </div>
         <div className="location-toolbar">
           <label className="location-select">
@@ -295,7 +320,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
                 <option value="">All Locations ({assets.length})</option>
                 {siteOptions.map((site) => (
                   <option key={site.id} value={site.id}>
-                    {site.name} ({siteCounts[site.id] ?? 0})
+                    {site.name}{site.state ? ` (${site.state})` : ''} — {siteCounts[site.id] ?? 0} assets
                   </option>
                 ))}
               </select>
@@ -436,6 +461,17 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
           user={user}
           onEdit={handleEdit}
           onDelete={requestDelete}
+        />
+      )}
+
+      {createSiteOpen && (
+        <CreateSiteModal
+          onCreated={(site) => {
+            setSites((current) => [...current, site].sort((a, b) => a.name.localeCompare(b.name)));
+            setCreateSiteOpen(false);
+            setActionMessage(`Site ${site.code} — ${site.name} created.`);
+          }}
+          onClose={() => setCreateSiteOpen(false)}
         />
       )}
     </main>

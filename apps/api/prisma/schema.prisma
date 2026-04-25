@@ -28,6 +28,8 @@ model Site {
   id               String    @id @default(uuid())
   code             String    @unique
   name             String
+  city             String?
+  state            String?
   tempPasswordHash String?
   createdAt        DateTime  @default(now())
 

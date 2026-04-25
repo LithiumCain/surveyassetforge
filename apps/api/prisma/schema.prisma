@@ -35,6 +35,7 @@ model Site {
 
   users            User[]
   auditLogs        AuditLog[]
+  assignments      AssetAssignment[]
 
   @@map("sites")
 }
@@ -53,7 +54,8 @@ model User {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  auditLogs      AuditLog[]
+  auditLogs       AuditLog[]
+  assignmentsMade AssetAssignment[] @relation("AssignmentsMade")
 
   @@map("users")
 }
@@ -72,4 +74,21 @@ model AuditLog {
   site      Site @relation(fields: [siteId], references: [id])
 
   @@map("audit_logs")
+}
+
+model AssetAssignment {
+  id               String    @id @default(uuid())
+  assetId          String
+  assignedToName   String
+  assignedToNumber String?
+  siteId           String
+  checkedOutAt     DateTime  @default(now())
+  checkedInAt      DateTime?
+  notes            String?
+  assignedById     String
+
+  site         Site @relation(fields: [siteId], references: [id])
+  assignedBy   User @relation("AssignmentsMade", fields: [assignedById], references: [id])
+
+  @@map("asset_assignments")
 }

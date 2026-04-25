@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { prisma } from '../app.js';
 import { query } from '../config/db.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
@@ -244,6 +245,16 @@ assetRoutes.post('/assets', authorize('super_admin', 'site_supervisor'), async (
       ],
     );
 
+    await prisma.auditLog.create({
+      data: {
+        userId:   req.user!.id,
+        siteId:   data.siteId,
+        action:   'ASSET_CREATED',
+        field:    'assetNumber',
+        newValue: data.assetNumber,
+      },
+    });
+
     return res.status(201).json({ id: result.rows[0].id });
   } catch (err) {
     next(err);
@@ -339,6 +350,17 @@ assetRoutes.put('/assets/:id', authorize('super_admin', 'site_supervisor'), asyn
       ],
     );
 
+    await prisma.auditLog.create({
+      data: {
+        userId:   req.user!.id,
+        siteId:   data.siteId,
+        action:   'ASSET_UPDATED',
+        field:    'assetNumber',
+        oldValue: row.asset_number,
+        newValue: data.assetNumber,
+      },
+    });
+
     return res.status(204).send();
   } catch (err) {
     next(err);
@@ -347,10 +369,27 @@ assetRoutes.put('/assets/:id', authorize('super_admin', 'site_supervisor'), asyn
 
 assetRoutes.delete('/assets/:id', authorize('super_admin'), async (req, res, next) => {
   try {
-    const result = await query('DELETE FROM assets WHERE id = $1', [req.params.id]);
-    if (result.rowCount === 0) {
+    const existing = await query<{ site_id: string; asset_number: string }>(
+      'SELECT site_id, asset_number FROM assets WHERE id = $1',
+      [req.params.id],
+    );
+    const target = existing.rows[0];
+    if (!target) {
       return res.status(404).json({ message: 'Asset not found' });
     }
+
+    await query('DELETE FROM assets WHERE id = $1', [req.params.id]);
+
+    await prisma.auditLog.create({
+      data: {
+        userId:   req.user!.id,
+        siteId:   target.site_id,
+        action:   'ASSET_DELETED',
+        field:    'assetNumber',
+        oldValue: target.asset_number,
+      },
+    });
+
     return res.status(204).send();
   } catch (err) {
     next(err);

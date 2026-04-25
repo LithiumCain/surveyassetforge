@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { AssetForm } from '../components/AssetForm';
 import { AssetTable } from '../components/AssetTable';
+import { AssignModal } from '../components/AssignModal';
 import { CreateSiteModal } from '../components/CreateSiteModal';
+import { CustodyHistory } from '../components/CustodyHistory';
 import { RegionalAlerts } from '../components/RegionalAlerts';
-import { Asset, AssetPayload, Site, User } from '../types';
+import { Asset, AssetAssignment, AssetPayload, Site, User } from '../types';
 
 type Props = {
   user: User;
@@ -31,6 +33,9 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
   const [pendingUndoDelete, setPendingUndoDelete] = useState<Asset | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [createSiteOpen, setCreateSiteOpen] = useState(false);
+  const [activeAssignments, setActiveAssignments] = useState<Record<string, AssetAssignment>>({});
+  const [assignTarget, setAssignTarget] = useState<Asset | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<Asset | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const formAnchorRef = useRef<HTMLDivElement | null>(null);
 
@@ -150,6 +155,11 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
       const [siteRows, assetRows] = await Promise.all([apiClient.getSites(), apiClient.getAssets()]);
       setSites(siteRows);
       setAssets(assetRows);
+
+      if (user.role === 'super_admin' || user.role === 'regional_director') {
+        const assignmentRows = await apiClient.getActiveAssignments();
+        setActiveAssignments(Object.fromEntries(assignmentRows.map((a) => [a.assetId, a])));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
@@ -250,6 +260,20 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
     setActionMessage(`${pendingUndoDelete.assetNumber} restored.`);
     setPendingUndoDelete(null);
     await loadData();
+  };
+
+  const handleCheckIn = async (asset: Asset): Promise<void> => {
+    try {
+      await apiClient.checkInAsset(asset.id);
+      setActiveAssignments((prev) => {
+        const next = { ...prev };
+        delete next[asset.id];
+        return next;
+      });
+      setActionMessage(`${asset.assetNumber} checked in.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Check-in failed');
+    }
   };
 
   const handleScanLookup = async (): Promise<void> => {
@@ -459,8 +483,31 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
         <AssetTable
           assets={filteredAssets}
           user={user}
+          activeAssignments={activeAssignments}
           onEdit={handleEdit}
           onDelete={requestDelete}
+          onAssign={setAssignTarget}
+          onCheckIn={(asset) => void handleCheckIn(asset)}
+          onViewHistory={setHistoryTarget}
+        />
+      )}
+
+      {assignTarget && (
+        <AssignModal
+          asset={assignTarget}
+          onAssigned={() => {
+            void loadData();
+            setAssignTarget(null);
+            setActionMessage(`${assignTarget.assetNumber} checked out.`);
+          }}
+          onClose={() => setAssignTarget(null)}
+        />
+      )}
+
+      {historyTarget && (
+        <CustodyHistory
+          asset={historyTarget}
+          onClose={() => setHistoryTarget(null)}
         />
       )}
 

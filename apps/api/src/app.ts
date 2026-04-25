@@ -7,6 +7,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { errorHandler } from './middleware/errorHandler.js';
 import { assetRoutes } from './routes/assetRoutes.js';
+import { assignmentRoutes } from './routes/assignmentRoutes.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { siteRoutes } from './routes/siteRoutes.js';
 
@@ -26,6 +27,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/v1', authRoutes);
 app.use('/api/v1', siteRoutes);
 app.use('/api/v1', assetRoutes);
+app.use('/api/v1', assignmentRoutes);
 
 app.use(errorHandler);
 

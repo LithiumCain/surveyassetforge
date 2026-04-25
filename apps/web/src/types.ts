@@ -64,6 +64,33 @@ export type Asset = {
   updatedAt: string;
 };
 
+export type AssetAssignment = {
+  id: string;
+  assetId: string;
+  assignedToName: string;
+  assignedToNumber: string | null;
+  siteId: string;
+  checkedOutAt: string;
+  checkedInAt: string | null;
+  notes: string | null;
+  assignedById: string;
+  assignedBy?: {
+    username: string;
+    firstName: string | null;
+    lastName: string | null;
+  };
+  site?: {
+    code: string;
+    name: string;
+  };
+};
+
+export type AssignPayload = {
+  assignedToName: string;
+  assignedToNumber: string | null;
+  notes: string | null;
+};
+
 export type AssetPayload = {
   assetNumber: string;
   partNumber: string | null;

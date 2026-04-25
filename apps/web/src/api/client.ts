@@ -1,4 +1,4 @@
-import { Asset, AssetPayload, CreateSitePayload, Site, User } from '../types';
+import { Asset, AssetAssignment, AssetPayload, AssignPayload, CreateSitePayload, Site, User } from '../types';
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000/api/v1';
 
@@ -84,6 +84,27 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ assetNumber }),
     });
+  }
+
+  assignAsset(assetId: string, payload: AssignPayload): Promise<AssetAssignment> {
+    return this.request(`/assets/${assetId}/assign`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  checkInAsset(assetId: string): Promise<AssetAssignment> {
+    return this.request(`/assets/${assetId}/checkin`, {
+      method: 'POST',
+    });
+  }
+
+  getAssetHistory(assetId: string): Promise<AssetAssignment[]> {
+    return this.request(`/assets/${assetId}/assignments`);
+  }
+
+  getActiveAssignments(): Promise<AssetAssignment[]> {
+    return this.request('/assignments/active');
   }
 }
 

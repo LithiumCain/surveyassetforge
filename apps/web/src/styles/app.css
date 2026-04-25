@@ -760,6 +760,116 @@ td:first-child { font-weight: 600; color: var(--primary); font-size: 12px; }
   margin: 0;
 }
 
+.modal-wide {
+  max-width: 640px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* ================================================================
+   ASSIGNMENT PILL (in table cell)
+   ================================================================ */
+
+.assignment-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.assignment-number {
+  color: #60a5fa;
+  font-weight: 400;
+}
+
+.icon-action.checkout { color: #0891b2; border-color: #a5f3fc; }
+.icon-action.checkin  { color: #059669; border-color: #a7f3d0; }
+
+/* ================================================================
+   CUSTODY HISTORY LIST
+   ================================================================ */
+
+.custody-list {
+  display: grid;
+  gap: 8px;
+}
+
+.custody-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px 16px;
+  align-items: start;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fafcff;
+  font-size: 13px;
+}
+
+.custody-row--active {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.custody-assignee {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.custody-name {
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.custody-number {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.custody-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.custody-duration {
+  font-weight: 600;
+  color: #475569;
+}
+
+.custody-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: right;
+}
+
+.custody-notes {
+  font-size: 12px;
+  color: #374151;
+  font-style: italic;
+}
+
+.custody-by {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 
 /* ================================================================
    RESPONSIVE

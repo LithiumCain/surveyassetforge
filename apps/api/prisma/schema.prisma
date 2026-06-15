@@ -1,6 +1,12 @@
-// =========================
-// DATABASE + CLIENT CONFIG
-// =========================
+// =============================================================================
+// Survey Asset Forge (SAF) — Database Schema
+// -----------------------------------------------------------------------------
+// Single source of truth for the database. Prisma generates the SQL tables from
+// this file, so the DB and the code can never drift apart again.
+//
+// Multi-tenant from day one: every business table carries an `organizationId`.
+// One Organization = one licensed company. Data is walled off per organization.
+// =============================================================================
 
 datasource db {
   provider = "postgresql"
@@ -14,81 +20,216 @@ generator client {
 // ENUMS
 // =========================
 
+// App-level roles. (Org membership/auth is handled by Clerk; these control what
+// a user can DO inside their organization once signed in.)
 enum Role {
-  super_admin
-  regional_director
-  site_supervisor
+  super_admin // org owner — full access across all sites in their org
+  regional_director // fleet-wide read/manage across sites in their org
+  site_supervisor // limited to their own site
+}
+
+// Equipment lifecycle. Enables SOFT delete (archive) instead of destroying rows.
+enum EquipmentStatus {
+  active
+  archived
+  lost
+  sold
+}
+
+enum CalibrationStatus {
+  ok
+  warning
+  due_soon
+  overdue
+  never_calibrated
+}
+
+enum DamageStatus {
+  ok
+  reported
+  under_repair
+}
+
+enum AssetOwnership {
+  owned
+  rental
+  rpo
+  unknown
 }
 
 // =========================
-// MODELS
+// ORGANIZATION  (the tenant boundary)
+// =========================
+
+model Organization {
+  id         String   @id @default(uuid())
+  clerkOrgId String   @unique @map("clerk_org_id") // links to a Clerk Organization
+  name       String
+  slug       String   @unique
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  sites       Site[]
+  users       User[]
+  equipment   Equipment[]
+  assignments AssetAssignment[]
+  auditLogs   AuditLog[]
+
+  @@map("organizations")
+}
+
+// =========================
+// SITE
 // =========================
 
 model Site {
-  id               String    @id @default(uuid())
-  code             String    @unique
-  name             String
-  city             String?
-  state            String?
-  tempPasswordHash String?
-  createdAt        DateTime  @default(now())
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  code           String
+  name           String
+  city           String?
+  state          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  users            User[]
-  auditLogs        AuditLog[]
-  assignments      AssetAssignment[]
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users        User[]
+  equipment    Equipment[]
+  assignments  AssetAssignment[]
+  auditLogs    AuditLog[]
 
+  @@unique([organizationId, code]) // codes are unique within an org, not globally
+  @@index([organizationId])
   @@map("sites")
 }
 
-model User {
-  id             String    @id @default(uuid())
-  firstName      String?
-  lastName       String?
-  username       String    @unique
-  email          String?
-  internalEmail  String    @unique
-  passwordHash   String
-  role           Role
-  siteId         String?
-  site           Site?     @relation(fields: [siteId], references: [id])
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+// =========================
+// USER  (mirrors a Clerk user; we keep a local row for role + relations)
+// =========================
 
+model User {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  clerkUserId    String   @unique @map("clerk_user_id") // links to a Clerk user
+  email          String?
+  firstName      String?  @map("first_name")
+  lastName       String?  @map("last_name")
+  role           Role
+  siteId         String?  @map("site_id") // null for org-wide roles (super_admin, director)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site            Site?             @relation(fields: [siteId], references: [id])
   auditLogs       AuditLog[]
   assignmentsMade AssetAssignment[] @relation("AssignmentsMade")
 
+  @@index([organizationId])
+  @@index([clerkUserId])
   @@map("users")
 }
 
-model AuditLog {
-  id        String   @id @default(uuid())
-  userId    String
-  siteId    String
-  action    String
-  field     String?
-  oldValue  String?
-  newValue  String?
-  timestamp DateTime @default(now())
+// =========================
+// EQUIPMENT  (the asset record — now a first-class table in the data layer)
+// =========================
 
-  user      User @relation(fields: [userId], references: [id])
-  site      Site @relation(fields: [siteId], references: [id])
+model Equipment {
+  id                      String            @id @default(uuid())
+  organizationId          String            @map("organization_id")
+  siteId                  String            @map("site_id")
+  assetNumber             String            @map("asset_number")
+  partNumber              String?           @map("part_number")
+  serialNumber            String?           @map("serial_number")
+  itemName                String            @map("item_name")
+  manufacturer            String?
+  equipmentType           String            @map("equipment_type") // free-form (e.g. GNSS, Receiver, Tablet)
+  ownership               AssetOwnership    @default(unknown)
+  assignedName            String?           @map("assigned_name")
+  employeeNumber          String?           @map("employee_number")
+  vendor                  String?
+  firmwareVersion         String?           @map("firmware_version")
+  latestFirmwareVersion   String?           @map("latest_firmware_version")
+  subscriptionEndDate     DateTime?         @map("subscription_end_date") @db.Date
+  lastCalibrationDate     DateTime?         @map("last_calibration_date") @db.Date
+  calibrationIntervalDays Int               @default(30) @map("calibration_interval_days")
+  nextCalibrationDue      DateTime?         @map("next_calibration_due") @db.Date
+  calibrationStatus       CalibrationStatus @default(never_calibrated) @map("calibration_status")
+  damageStatus            DamageStatus      @default(ok) @map("damage_status")
+  damageType              String?           @map("damage_type")
+  assetNotes              String?           @map("asset_notes")
+  repairNotes             String?           @map("repair_notes")
+  estimatedRepairCost     Decimal           @default(0) @map("estimated_repair_cost") @db.Decimal(12, 2)
+  cost                    Decimal           @default(0) @db.Decimal(12, 2)
+  replacementCost         Decimal           @default(0) @map("replacement_cost") @db.Decimal(12, 2)
+  acquiredDate            DateTime?         @map("acquired_date") @db.Date
+  sourceSheetName         String?           @map("source_sheet_name") // provenance for spreadsheet imports
+  sourceRowNumber         Int?              @map("source_row_number")
+  status                  EquipmentStatus   @default(active) // soft-delete instead of destroying data
+  createdAt               DateTime          @default(now()) @map("created_at")
+  updatedAt               DateTime          @updatedAt @map("updated_at")
 
-  @@map("audit_logs")
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site         Site              @relation(fields: [siteId], references: [id])
+  assignments  AssetAssignment[]
+
+  @@unique([organizationId, assetNumber]) // asset numbers unique within an org
+  @@index([organizationId, siteId])
+  @@index([organizationId, calibrationStatus])
+  @@map("equipment")
 }
+
+// =========================
+// ASSET ASSIGNMENT  (check-out / check-in history)
+// =========================
 
 model AssetAssignment {
   id               String    @id @default(uuid())
-  assetId          String
-  assignedToName   String
-  assignedToNumber String?
-  siteId           String
-  checkedOutAt     DateTime  @default(now())
-  checkedInAt      DateTime?
+  organizationId   String    @map("organization_id")
+  equipmentId      String    @map("equipment_id")
+  siteId           String    @map("site_id")
+  assignedToName   String    @map("assigned_to_name")
+  assignedToNumber String?   @map("assigned_to_number")
+  checkedOutAt     DateTime  @default(now()) @map("checked_out_at")
+  checkedInAt      DateTime? @map("checked_in_at")
   notes            String?
-  assignedById     String
+  assignedById     String    @map("assigned_by_id")
 
-  site         Site @relation(fields: [siteId], references: [id])
-  assignedBy   User @relation("AssignmentsMade", fields: [assignedById], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  equipment    Equipment    @relation(fields: [equipmentId], references: [id])
+  site         Site         @relation(fields: [siteId], references: [id])
+  assignedBy   User         @relation("AssignmentsMade", fields: [assignedById], references: [id])
 
+  @@index([organizationId, equipmentId])
   @@map("asset_assignments")
+}
+
+// =========================
+// AUDIT LOG  (one row per mutation — the compliance trail)
+// Reconciles the two old conflicting definitions into one complete table.
+// =========================
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  userId         String?  @map("user_id") // null for system events (seed, import)
+  siteId         String?  @map("site_id")
+  action         String // e.g. "equipment.created", "equipment.updated"
+  entityType     String   @map("entity_type") // "equipment", "site", "user"
+  entityId       String   @map("entity_id")
+  field          String?
+  oldValue       String?  @map("old_value")
+  newValue       String?  @map("new_value")
+  metadata       Json? // before/after snapshots or extra context
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id])
+  site         Site?        @relation(fields: [siteId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
 }

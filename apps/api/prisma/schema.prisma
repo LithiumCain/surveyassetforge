@@ -25,15 +25,23 @@ generator client {
 enum Role {
   super_admin // org owner — full access across all sites in their org
   regional_director // fleet-wide read/manage across sites in their org
-  site_supervisor // limited to their own site
+  site_supervisor // limited to their own site (the on-site Survey Superintendent)
 }
 
-// Equipment lifecycle. Enables SOFT delete (archive) instead of destroying rows.
+// Sites churn: ~25 active at peak, plus 50–75 inactive ones kept for history.
+enum SiteStatus {
+  active
+  inactive
+}
+
+// Equipment lifecycle. "active" gear is in use or sitting in inventory; the
+// rest are real dispositions we retain for history (never hard-deleted).
 enum EquipmentStatus {
   active
-  archived
-  lost
   sold
+  lost
+  stolen
+  written_off
 }
 
 enum CalibrationStatus {
@@ -69,11 +77,12 @@ model Organization {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  sites       Site[]
-  users       User[]
-  equipment   Equipment[]
-  assignments AssetAssignment[]
-  auditLogs   AuditLog[]
+  sites              Site[]
+  users              User[]
+  equipment          Equipment[]
+  assignments        AssetAssignment[]
+  auditLogs          AuditLog[]
+  calibrationRecords CalibrationRecord[]
 
   @@map("organizations")
 }
@@ -83,14 +92,15 @@ model Organization {
 // =========================
 
 model Site {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
+  id             String     @id @default(uuid())
+  organizationId String     @map("organization_id")
   code           String
   name           String
   city           String?
   state          String?
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  status         SiteStatus @default(active)
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
 
   organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   users        User[]
@@ -99,7 +109,7 @@ model Site {
   auditLogs    AuditLog[]
 
   @@unique([organizationId, code]) // codes are unique within an org, not globally
-  @@index([organizationId])
+  @@index([organizationId, status])
   @@map("sites")
 }
 
@@ -120,10 +130,11 @@ model User {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  site            Site?             @relation(fields: [siteId], references: [id])
-  auditLogs       AuditLog[]
-  assignmentsMade AssetAssignment[] @relation("AssignmentsMade")
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site               Site?               @relation(fields: [siteId], references: [id])
+  auditLogs          AuditLog[]
+  assignmentsMade    AssetAssignment[]   @relation("AssignmentsMade")
+  calibrationsLogged CalibrationRecord[]
 
   @@index([organizationId])
   @@index([clerkUserId])
@@ -132,13 +143,14 @@ model User {
 
 // =========================
 // EQUIPMENT  (the asset record — now a first-class table in the data layer)
+// siteId is OPTIONAL: equipment with no site is "in inventory" (unassigned).
 // =========================
 
 model Equipment {
   id                      String            @id @default(uuid())
   organizationId          String            @map("organization_id")
-  siteId                  String            @map("site_id")
-  assetNumber             String            @map("asset_number")
+  siteId                  String?           @map("site_id") // null = in inventory (unassigned)
+  assetNumber             String            @map("asset_number") // immutable; follows the gear for life
   partNumber              String?           @map("part_number")
   serialNumber            String?           @map("serial_number")
   itemName                String            @map("item_name")
@@ -165,18 +177,44 @@ model Equipment {
   acquiredDate            DateTime?         @map("acquired_date") @db.Date
   sourceSheetName         String?           @map("source_sheet_name") // provenance for spreadsheet imports
   sourceRowNumber         Int?              @map("source_row_number")
-  status                  EquipmentStatus   @default(active) // soft-delete instead of destroying data
+  status                  EquipmentStatus   @default(active)
+  dispositionNotes        String?           @map("disposition_notes") // why it was sold/lost/etc.
   createdAt               DateTime          @default(now()) @map("created_at")
   updatedAt               DateTime          @updatedAt @map("updated_at")
 
-  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  site         Site              @relation(fields: [siteId], references: [id])
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site         Site?               @relation(fields: [siteId], references: [id])
   assignments  AssetAssignment[]
+  calibrations CalibrationRecord[]
 
   @@unique([organizationId, assetNumber]) // asset numbers unique within an org
   @@index([organizationId, siteId])
+  @@index([organizationId, status])
   @@index([organizationId, calibrationStatus])
   @@map("equipment")
+}
+
+// =========================
+// CALIBRATION RECORD  (history — one row per calibration event)
+// Logged on-site by the Survey Superintendent, with a photo (no PDF cert).
+// =========================
+
+model CalibrationRecord {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  equipmentId    String   @map("equipment_id")
+  calibratedDate DateTime @map("calibrated_date") @db.Date
+  calibratedById String?  @map("calibrated_by_id") // user who logged it
+  photoUrl       String?  @map("photo_url") // Vercel Blob URL (uploaded later)
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  equipment    Equipment    @relation(fields: [equipmentId], references: [id])
+  calibratedBy User?        @relation(fields: [calibratedById], references: [id])
+
+  @@index([equipmentId, calibratedDate])
+  @@map("calibration_records")
 }
 
 // =========================
@@ -187,7 +225,7 @@ model AssetAssignment {
   id               String    @id @default(uuid())
   organizationId   String    @map("organization_id")
   equipmentId      String    @map("equipment_id")
-  siteId           String    @map("site_id")
+  siteId           String?   @map("site_id") // the equipment's site at checkout (null if from inventory)
   assignedToName   String    @map("assigned_to_name")
   assignedToNumber String?   @map("assigned_to_number")
   checkedOutAt     DateTime  @default(now()) @map("checked_out_at")
@@ -197,7 +235,7 @@ model AssetAssignment {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   equipment    Equipment    @relation(fields: [equipmentId], references: [id])
-  site         Site         @relation(fields: [siteId], references: [id])
+  site         Site?        @relation(fields: [siteId], references: [id])
   assignedBy   User         @relation("AssignmentsMade", fields: [assignedById], references: [id])
 
   @@index([organizationId, equipmentId])
@@ -206,7 +244,6 @@ model AssetAssignment {
 
 // =========================
 // AUDIT LOG  (one row per mutation — the compliance trail)
-// Reconciles the two old conflicting definitions into one complete table.
 // =========================
 
 model AuditLog {

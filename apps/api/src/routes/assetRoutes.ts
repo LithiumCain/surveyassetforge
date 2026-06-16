@@ -19,7 +19,8 @@ const assetSchema = z.object({
   itemName: z.string().min(1),
   manufacturer: z.string().optional().nullable(),
   equipmentType: z.string().min(1),
-  siteId: z.string().uuid(),
+  // null/omitted => "in inventory" (unassigned).
+  siteId: z.string().uuid().optional().nullable(),
   ownership: z.enum(['owned', 'rental', 'rpo', 'unknown']).default('unknown'),
   assignedName: z.string().optional().nullable(),
   employeeNumber: z.string().optional().nullable(),
@@ -40,6 +41,17 @@ const assetSchema = z.object({
 });
 
 const scanSchema = z.object({ assetNumber: z.string().min(2) });
+
+const disposeSchema = z.object({
+  status: z.enum(['sold', 'lost', 'stolen', 'written_off']).default('written_off'),
+  notes: z.string().max(500).optional().nullable(),
+});
+
+const calibrationSchema = z.object({
+  calibratedDate: z.string().date(),
+  notes: z.string().max(500).optional().nullable(),
+  photoUrl: z.string().url().max(1000).optional().nullable(),
+});
 
 type EquipmentWithSite = Prisma.EquipmentGetPayload<{ include: { site: true } }>;
 
@@ -65,7 +77,8 @@ const toDto = (e: EquipmentWithSite) => {
     manufacturer: e.manufacturer,
     equipmentType: e.equipmentType,
     siteId: e.siteId,
-    siteName: e.site.name,
+    siteName: e.site?.name ?? null, // null => in inventory
+    inInventory: e.siteId === null,
     ownership: e.ownership,
     assignedName: e.assignedName,
     employeeNumber: e.employeeNumber,
@@ -87,6 +100,8 @@ const toDto = (e: EquipmentWithSite) => {
     replacementCost,
     currentValue: computeCurrentValue(cost, acquiredDate),
     replacementRecommended: shouldRecommendReplacement(estimatedRepairCost, replacementCost),
+    status: e.status,
+    dispositionNotes: e.dispositionNotes,
     acquiredDate,
     sourceSheetName: e.sourceSheetName,
     sourceRowNumber: e.sourceRowNumber,
@@ -96,10 +111,11 @@ const toDto = (e: EquipmentWithSite) => {
 };
 
 // Base org-scope for the caller. Supervisors are further limited to their site.
+// Only "active" equipment is listed; disposed items are kept but hidden.
 const listScope = (req: Request): Prisma.EquipmentWhereInput => {
   const where: Prisma.EquipmentWhereInput = {
     organizationId: req.user!.organizationId,
-    status: { not: 'archived' },
+    status: 'active',
   };
   if (req.user!.role === 'site_supervisor' && req.user!.siteId) {
     where.siteId = req.user!.siteId;
@@ -142,6 +158,29 @@ assetRoutes.get('/assets/:id', async (req, res, next) => {
   }
 });
 
+// Resolve + validate the site for a write. Returns the siteId to persist, or a
+// string error message. Supervisors are pinned to their own site; admins may
+// pass null to place gear in inventory.
+const resolveSiteForWrite = async (
+  req: Request,
+  siteId: string | null,
+): Promise<{ siteId: string | null } | { error: string }> => {
+  if (req.user!.role === 'site_supervisor') {
+    if (!siteId || siteId !== req.user!.siteId) {
+      return { error: 'Field users can only manage assets at their own site' };
+    }
+  }
+  if (siteId) {
+    const site = await prisma.site.findFirst({
+      where: { id: siteId, organizationId: req.user!.organizationId },
+    });
+    if (!site) {
+      return { error: 'Unknown site for this organization' };
+    }
+  }
+  return { siteId: siteId ?? null };
+};
+
 assetRoutes.post('/assets', authorize('super_admin', 'site_supervisor'), async (req, res, next) => {
   try {
     const parsed = assetSchema.safeParse(req.body);
@@ -150,16 +189,9 @@ assetRoutes.post('/assets', authorize('super_admin', 'site_supervisor'), async (
     }
     const data = parsed.data;
 
-    if (req.user!.role === 'site_supervisor' && data.siteId !== req.user!.siteId) {
-      return res.status(403).json({ message: 'Field users can only create assets in their site' });
-    }
-
-    // The target site must belong to the caller's organization.
-    const site = await prisma.site.findFirst({
-      where: { id: data.siteId, organizationId: req.user!.organizationId },
-    });
-    if (!site) {
-      return res.status(400).json({ message: 'Unknown site for this organization' });
+    const resolved = await resolveSiteForWrite(req, data.siteId ?? null);
+    if ('error' in resolved) {
+      return res.status(req.user!.role === 'site_supervisor' ? 403 : 400).json({ message: resolved.error });
     }
 
     const nextDueIso = computeNextCalibrationDue(
@@ -171,7 +203,7 @@ assetRoutes.post('/assets', authorize('super_admin', 'site_supervisor'), async (
       const created = await prisma.equipment.create({
         data: {
           organizationId: req.user!.organizationId,
-          siteId: data.siteId,
+          siteId: resolved.siteId,
           assetNumber: data.assetNumber,
           partNumber: data.partNumber ?? null,
           serialNumber: data.serialNumber ?? null,
@@ -233,12 +265,13 @@ assetRoutes.put('/assets/:id', authorize('super_admin', 'site_supervisor'), asyn
     if (!existing) {
       return res.status(404).json({ message: 'Asset not found' });
     }
-
     if (req.user!.role === 'site_supervisor' && existing.siteId !== req.user!.siteId) {
-      return res.status(403).json({ message: 'Field users can only update assets in their site' });
+      return res.status(403).json({ message: 'Field users can only update assets at their site' });
     }
-    if (req.user!.role === 'site_supervisor' && data.siteId !== req.user!.siteId) {
-      return res.status(403).json({ message: 'Field users cannot move assets to another site' });
+
+    const resolved = await resolveSiteForWrite(req, data.siteId ?? null);
+    if ('error' in resolved) {
+      return res.status(req.user!.role === 'site_supervisor' ? 403 : 400).json({ message: resolved.error });
     }
 
     const nextDueIso = computeNextCalibrationDue(
@@ -249,7 +282,7 @@ assetRoutes.put('/assets/:id', authorize('super_admin', 'site_supervisor'), asyn
     await prisma.equipment.update({
       where: { id: existing.id },
       data: {
-        siteId: data.siteId,
+        siteId: resolved.siteId,
         assetNumber: data.assetNumber,
         partNumber: data.partNumber ?? null,
         serialNumber: data.serialNumber ?? null,
@@ -280,7 +313,7 @@ assetRoutes.put('/assets/:id', authorize('super_admin', 'site_supervisor'), asyn
       action: 'equipment.updated',
       entityType: 'equipment',
       entityId: existing.id,
-      siteId: data.siteId,
+      siteId: resolved.siteId,
       field: 'assetNumber',
       oldValue: existing.assetNumber,
       newValue: data.assetNumber,
@@ -292,9 +325,15 @@ assetRoutes.put('/assets/:id', authorize('super_admin', 'site_supervisor'), asyn
   }
 });
 
-// Soft delete — archive instead of destroying the record.
+// Dispose of equipment — sold / lost / stolen / written-off. We keep the record
+// (never destroyed); it just leaves the active list.
 assetRoutes.delete('/assets/:id', authorize('super_admin'), async (req, res, next) => {
   try {
+    const parsed = disposeSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Invalid disposition', issues: parsed.error.issues });
+    }
+
     const existing = await prisma.equipment.findFirst({
       where: { id: req.params.id, organizationId: req.user!.organizationId },
     });
@@ -304,20 +343,109 @@ assetRoutes.delete('/assets/:id', authorize('super_admin'), async (req, res, nex
 
     await prisma.equipment.update({
       where: { id: existing.id },
-      data: { status: 'archived' },
+      data: { status: parsed.data.status, dispositionNotes: parsed.data.notes ?? null },
     });
 
     await auditFromRequest(req, {
-      action: 'equipment.archived',
+      action: 'equipment.disposed',
       entityType: 'equipment',
       entityId: existing.id,
       siteId: existing.siteId,
       field: 'status',
       oldValue: existing.status,
-      newValue: 'archived',
+      newValue: parsed.data.status,
     });
 
     return res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Log a calibration event (on-site Survey Superintendent, with optional photo).
+// Updates the equipment's last-calibrated date and recomputes its status.
+assetRoutes.post(
+  '/assets/:id/calibrations',
+  authorize('super_admin', 'regional_director', 'site_supervisor'),
+  async (req, res, next) => {
+    try {
+      const parsed = calibrationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Invalid request body', issues: parsed.error.issues });
+      }
+
+      const equipment = await prisma.equipment.findFirst({
+        where: { id: req.params.id, organizationId: req.user!.organizationId },
+      });
+      if (!equipment) {
+        return res.status(404).json({ message: 'Asset not found' });
+      }
+      if (req.user!.role === 'site_supervisor' && equipment.siteId !== req.user!.siteId) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+
+      const nextDueIso = computeNextCalibrationDue(
+        parsed.data.calibratedDate,
+        equipment.calibrationIntervalDays,
+      );
+
+      const record = await prisma.calibrationRecord.create({
+        data: {
+          organizationId: req.user!.organizationId,
+          equipmentId: equipment.id,
+          calibratedDate: dateOnlyToDate(parsed.data.calibratedDate)!,
+          calibratedById: req.user!.id,
+          photoUrl: parsed.data.photoUrl ?? null,
+          notes: parsed.data.notes ?? null,
+        },
+      });
+
+      await prisma.equipment.update({
+        where: { id: equipment.id },
+        data: {
+          lastCalibrationDate: dateOnlyToDate(parsed.data.calibratedDate),
+          nextCalibrationDue: dateOnlyToDate(nextDueIso),
+          calibrationStatus: computeCalibrationStatus(nextDueIso),
+        },
+      });
+
+      await auditFromRequest(req, {
+        action: 'calibration.logged',
+        entityType: 'equipment',
+        entityId: equipment.id,
+        siteId: equipment.siteId,
+        field: 'lastCalibrationDate',
+        oldValue: equipment.lastCalibrationDate ? toDateOnly(equipment.lastCalibrationDate) : null,
+        newValue: parsed.data.calibratedDate,
+      });
+
+      return res.status(201).json(record);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Calibration history for one piece of equipment.
+assetRoutes.get('/assets/:id/calibrations', async (req, res, next) => {
+  try {
+    const equipment = await prisma.equipment.findFirst({
+      where: { id: req.params.id, organizationId: req.user!.organizationId },
+      select: { id: true, siteId: true },
+    });
+    if (!equipment) {
+      return res.status(404).json({ message: 'Asset not found' });
+    }
+    if (req.user!.role === 'site_supervisor' && equipment.siteId !== req.user!.siteId) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const records = await prisma.calibrationRecord.findMany({
+      where: { equipmentId: equipment.id, organizationId: req.user!.organizationId },
+      include: { calibratedBy: { select: { firstName: true, lastName: true, email: true } } },
+      orderBy: { calibratedDate: 'desc' },
+    });
+    return res.json(records);
   } catch (err) {
     next(err);
   }

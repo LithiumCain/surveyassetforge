@@ -4,16 +4,14 @@
 // Builds a self-contained DEMO tenant so we have something realistic to look at
 // while developing. 100% fictional — no real companies, people, or sites.
 //
-// Creates: one Organization (Faeheart Survey Co), 3 sites, 5 users (one per
-// role), and ~15 pieces of equipment spread across every calibration state.
+// Shows off the real-world shapes from discovery: an inactive (historical) site,
+// gear sitting in inventory (no site), a disposed item, and calibration history.
 //
-// Idempotent: safe to run repeatedly (uses upserts), so re-seeding never
-// duplicates rows.
+// Idempotent: safe to run repeatedly (uses upserts).
 //
-// NOTE on users: until Clerk is wired up, each user gets a PLACEHOLDER
+// NOTE on users: until Clerk is wired, each user gets a PLACEHOLDER
 // `clerkUserId` ("user_seed_*"). When Clerk goes live we'll link these rows to
-// real Clerk accounts (or re-seed). They exist now so equipment/audit relations
-// have something to point at.
+// real Clerk accounts (or re-seed).
 // =============================================================================
 
 import { Pool } from 'pg';
@@ -31,41 +29,39 @@ dotenv.config();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
-// Date N days from today (negative = past). Returns a midnight-UTC Date.
 const daysFromNow = (n: number): Date => {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() + n);
   return new Date(`${isoDate(d)}T00:00:00.000Z`);
 };
 
+type EquipmentStatusSeed = 'active' | 'sold' | 'lost' | 'stolen' | 'written_off';
+
 async function main() {
   // ===========================================================================
-  // 1. ORGANIZATION (the demo tenant)
+  // 1. ORGANIZATION
   // ===========================================================================
   const org = await prisma.organization.upsert({
     where: { slug: 'faeheart-survey-co' },
     update: { name: 'Faeheart Survey Co' },
-    create: {
-      name: 'Faeheart Survey Co',
-      slug: 'faeheart-survey-co',
-      clerkOrgId: 'org_seed_faeheart', // placeholder until Clerk is linked
-    },
+    create: { name: 'Faeheart Survey Co', slug: 'faeheart-survey-co', clerkOrgId: 'org_seed_faeheart' },
   });
 
   // ===========================================================================
-  // 2. SITES (3 fictional yards)
+  // 2. SITES (3 active + 1 inactive/historical)
   // ===========================================================================
   const siteSeed = [
-    { code: 'NVY', name: 'North Valley Yard', city: 'Boulder', state: 'CO' },
-    { code: 'SRD', name: 'South Ridge Depot', city: 'Santa Fe', state: 'NM' },
-    { code: 'EPF', name: 'East Plains Field Office', city: 'Amarillo', state: 'TX' },
+    { code: 'NVY', name: 'North Valley Yard', city: 'Boulder', state: 'CO', status: 'active' as const },
+    { code: 'SRD', name: 'South Ridge Depot', city: 'Santa Fe', state: 'NM', status: 'active' as const },
+    { code: 'EPF', name: 'East Plains Field Office', city: 'Amarillo', state: 'TX', status: 'active' as const },
+    { code: 'RYD', name: 'Retired Yard (closed)', city: 'Lubbock', state: 'TX', status: 'inactive' as const },
   ];
 
-  const sites: Record<string, string> = {}; // code -> site id
+  const sites: Record<string, string> = {};
   for (const s of siteSeed) {
     const site = await prisma.site.upsert({
       where: { organizationId_code: { organizationId: org.id, code: s.code } },
-      update: { name: s.name, city: s.city, state: s.state },
+      update: { name: s.name, city: s.city, state: s.state, status: s.status },
       create: { organizationId: org.id, ...s },
     });
     sites[s.code] = site.id;
@@ -82,8 +78,9 @@ async function main() {
     { clerkUserId: 'user_seed_sup_epf',  email: 'sam@faeheart.example',      firstName: 'Sam',    lastName: 'Rivera', role: 'site_supervisor' as const,   siteCode: 'EPF' },
   ];
 
+  const usersByClerk: Record<string, string> = {};
   for (const u of userSeed) {
-    await prisma.user.upsert({
+    const user = await prisma.user.upsert({
       where: { clerkUserId: u.clerkUserId },
       update: { email: u.email, firstName: u.firstName, lastName: u.lastName, role: u.role },
       create: {
@@ -96,22 +93,20 @@ async function main() {
         siteId: u.siteCode ? sites[u.siteCode] : null,
       },
     });
+    usersByClerk[u.clerkUserId] = user.id;
   }
 
   // ===========================================================================
-  // 4. EQUIPMENT (~15 items across every calibration state)
+  // 4. EQUIPMENT (~16 items: every calibration state, inventory, a disposal)
   // ===========================================================================
-  // `lastCalDaysAgo` + `intervalDays` are tuned to land each item in a specific
-  // calibration bucket; the exact next-due date + status are then computed by
-  // the SAME service the app uses, so demo data matches real logic.
   type Item = {
     assetNumber: string;
     itemName: string;
     equipmentType: string;
     manufacturer: string;
-    siteCode: string;
+    siteCode: string | null; // null => in inventory (unassigned)
     ownership: 'owned' | 'rental' | 'rpo' | 'unknown';
-    lastCalDaysAgo: number | null; // null => never calibrated
+    lastCalDaysAgo: number | null;
     intervalDays: number;
     cost: number;
     replacementCost: number;
@@ -120,27 +115,34 @@ async function main() {
     damageType: string | null;
     firmwareVersion: string | null;
     latestFirmwareVersion: string | null;
+    status?: EquipmentStatusSeed;
+    dispositionNotes?: string;
   };
 
   const items: Item[] = [
-    { assetNumber: 'SAF-GNSS-001', itemName: 'GNSS Base Receiver',  equipmentType: 'GNSS Receiver', manufacturer: 'Trimble', siteCode: 'NVY', ownership: 'owned',  lastCalDaysAgo: 5,    intervalDays: 90, cost: 18500, replacementCost: 21000, estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,            firmwareVersion: '6.21', latestFirmwareVersion: '6.21' },
-    { assetNumber: 'SAF-GNSS-002', itemName: 'GNSS Rover Receiver', equipmentType: 'GNSS Receiver', manufacturer: 'Trimble', siteCode: 'NVY', ownership: 'owned',  lastCalDaysAgo: 70,   intervalDays: 90, cost: 16900, replacementCost: 19500, estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,            firmwareVersion: '6.18', latestFirmwareVersion: '6.21' },
-    { assetNumber: 'SAF-TS-010',   itemName: 'Robotic Total Station', equipmentType: 'Total Station', manufacturer: 'Leica',  siteCode: 'NVY', ownership: 'rental', lastCalDaysAgo: 85,   intervalDays: 90, cost: 32000, replacementCost: 36000, estimatedRepairCost: 1200, damageStatus: 'reported',    damageType: 'Tribrach play', firmwareVersion: '4.10', latestFirmwareVersion: '4.12' },
-    { assetNumber: 'SAF-TS-011',   itemName: 'Manual Total Station',  equipmentType: 'Total Station', manufacturer: 'Leica',  siteCode: 'SRD', ownership: 'owned',  lastCalDaysAgo: 200,  intervalDays: 90, cost: 14500, replacementCost: 17000, estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,            firmwareVersion: '4.12', latestFirmwareVersion: '4.12' },
-    { assetNumber: 'SAF-DC-020',   itemName: 'Field Data Collector', equipmentType: 'Data Collector', manufacturer: 'Carlson', siteCode: 'SRD', ownership: 'owned', lastCalDaysAgo: 25,   intervalDays: 30, cost: 4200,  replacementCost: 5000,  estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,            firmwareVersion: '2.3',  latestFirmwareVersion: '2.3' },
-    { assetNumber: 'SAF-DC-021',   itemName: 'Field Data Collector', equipmentType: 'Data Collector', manufacturer: 'Carlson', siteCode: 'EPF', ownership: 'rpo',   lastCalDaysAgo: 10,   intervalDays: 30, cost: 4200,  replacementCost: 5000,  estimatedRepairCost: 3800, damageStatus: 'under_repair', damageType: 'Cracked screen', firmwareVersion: '2.1', latestFirmwareVersion: '2.3' },
-    { assetNumber: 'SAF-TAB-030',  itemName: 'Rugged Field Tablet',  equipmentType: 'Tablet', manufacturer: 'Panasonic', siteCode: 'EPF', ownership: 'owned',  lastCalDaysAgo: null, intervalDays: 30, cost: 2600,  replacementCost: 2900,  estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,            firmwareVersion: null,   latestFirmwareVersion: null },
-    { assetNumber: 'SAF-TAB-031',  itemName: 'Rugged Field Tablet',  equipmentType: 'Tablet', manufacturer: 'Panasonic', siteCode: 'NVY', ownership: 'owned',  lastCalDaysAgo: null, intervalDays: 30, cost: 2600,  replacementCost: 2900,  estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,            firmwareVersion: null,   latestFirmwareVersion: null },
-    { assetNumber: 'SAF-RAD-040',  itemName: 'UHF Radio Modem',      equipmentType: 'Radio', manufacturer: 'Pacific Crest', siteCode: 'SRD', ownership: 'owned', lastCalDaysAgo: 110, intervalDays: 90, cost: 1900,  replacementCost: 2200,  estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,            firmwareVersion: '1.4',  latestFirmwareVersion: '1.4' },
-    { assetNumber: 'SAF-LVL-050',  itemName: 'Digital Level',        equipmentType: 'Level', manufacturer: 'Leica',  siteCode: 'EPF', ownership: 'owned',  lastCalDaysAgo: 15,   intervalDays: 60, cost: 6800,  replacementCost: 7500,  estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,            firmwareVersion: '3.0',  latestFirmwareVersion: '3.0' },
-    { assetNumber: 'SAF-LVL-051',  itemName: 'Automatic Level',      equipmentType: 'Level', manufacturer: 'Topcon', siteCode: 'NVY', ownership: 'rental', lastCalDaysAgo: 55,  intervalDays: 60, cost: 1100,  replacementCost: 1300,  estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,            firmwareVersion: null,   latestFirmwareVersion: null },
-    { assetNumber: 'SAF-PRsm-060', itemName: 'Prism & Pole Kit',     equipmentType: 'Prism', manufacturer: 'Seco',   siteCode: 'SRD', ownership: 'owned',  lastCalDaysAgo: 3,    intervalDays: 180, cost: 850,   replacementCost: 950,   estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,            firmwareVersion: null,   latestFirmwareVersion: null },
-    { assetNumber: 'SAF-TRP-070',  itemName: 'Heavy-Duty Tripod',    equipmentType: 'Tripod', manufacturer: 'Seco',  siteCode: 'EPF', ownership: 'owned',  lastCalDaysAgo: 365,  intervalDays: 365, cost: 420,   replacementCost: 480,   estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,            firmwareVersion: null,   latestFirmwareVersion: null },
+    { assetNumber: 'SAF-GNSS-001', itemName: 'GNSS Base Receiver',  equipmentType: 'GNSS Receiver', manufacturer: 'Trimble', siteCode: 'NVY', ownership: 'owned',  lastCalDaysAgo: 5,    intervalDays: 90, cost: 18500, replacementCost: 21000, estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,             firmwareVersion: '6.21', latestFirmwareVersion: '6.21' },
+    { assetNumber: 'SAF-GNSS-002', itemName: 'GNSS Rover Receiver', equipmentType: 'GNSS Receiver', manufacturer: 'Trimble', siteCode: 'NVY', ownership: 'owned',  lastCalDaysAgo: 70,   intervalDays: 90, cost: 16900, replacementCost: 19500, estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,             firmwareVersion: '6.18', latestFirmwareVersion: '6.21' },
+    { assetNumber: 'SAF-TS-010',   itemName: 'Robotic Total Station', equipmentType: 'Total Station', manufacturer: 'Leica', siteCode: 'NVY', ownership: 'rental', lastCalDaysAgo: 85,   intervalDays: 90, cost: 32000, replacementCost: 36000, estimatedRepairCost: 1200, damageStatus: 'reported',    damageType: 'Tribrach play',  firmwareVersion: '4.10', latestFirmwareVersion: '4.12' },
+    { assetNumber: 'SAF-TS-011',   itemName: 'Manual Total Station',  equipmentType: 'Total Station', manufacturer: 'Leica', siteCode: 'SRD', ownership: 'owned',  lastCalDaysAgo: 200,  intervalDays: 90, cost: 14500, replacementCost: 17000, estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,             firmwareVersion: '4.12', latestFirmwareVersion: '4.12' },
+    { assetNumber: 'SAF-DC-020',   itemName: 'Field Data Collector', equipmentType: 'Data Collector', manufacturer: 'Carlson', siteCode: 'SRD', ownership: 'owned', lastCalDaysAgo: 25, intervalDays: 30, cost: 4200,  replacementCost: 5000,  estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,             firmwareVersion: '2.3',  latestFirmwareVersion: '2.3' },
+    { assetNumber: 'SAF-DC-021',   itemName: 'Field Data Collector', equipmentType: 'Data Collector', manufacturer: 'Carlson', siteCode: 'EPF', ownership: 'rpo',   lastCalDaysAgo: 10, intervalDays: 30, cost: 4200,  replacementCost: 5000,  estimatedRepairCost: 3800, damageStatus: 'under_repair', damageType: 'Cracked screen', firmwareVersion: '2.1',  latestFirmwareVersion: '2.3' },
+    { assetNumber: 'SAF-TAB-030',  itemName: 'Rugged Field Tablet',  equipmentType: 'Tablet', manufacturer: 'Panasonic', siteCode: 'EPF', ownership: 'owned',  lastCalDaysAgo: null, intervalDays: 30, cost: 2600,  replacementCost: 2900,  estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,             firmwareVersion: null,   latestFirmwareVersion: null },
+    { assetNumber: 'SAF-RAD-040',  itemName: 'UHF Radio Modem',      equipmentType: 'Radio', manufacturer: 'Pacific Crest', siteCode: 'SRD', ownership: 'owned', lastCalDaysAgo: 110, intervalDays: 90, cost: 1900,  replacementCost: 2200,  estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,             firmwareVersion: '1.4',  latestFirmwareVersion: '1.4' },
+    { assetNumber: 'SAF-LVL-050',  itemName: 'Digital Level',        equipmentType: 'Level', manufacturer: 'Leica',  siteCode: 'EPF', ownership: 'owned',  lastCalDaysAgo: 15,   intervalDays: 60, cost: 6800,  replacementCost: 7500,  estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,             firmwareVersion: '3.0',  latestFirmwareVersion: '3.0' },
+    { assetNumber: 'SAF-PRsm-060', itemName: 'Prism & Pole Kit',     equipmentType: 'Prism', manufacturer: 'Seco',   siteCode: 'SRD', ownership: 'owned',  lastCalDaysAgo: 3,    intervalDays: 180, cost: 850,  replacementCost: 950,   estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,             firmwareVersion: null,   latestFirmwareVersion: null },
+    { assetNumber: 'SAF-TRP-070',  itemName: 'Heavy-Duty Tripod',    equipmentType: 'Tripod', manufacturer: 'Seco',  siteCode: 'EPF', ownership: 'owned',  lastCalDaysAgo: 365,  intervalDays: 365, cost: 420,  replacementCost: 480,   estimatedRepairCost: 0,    damageStatus: 'ok',          damageType: null,             firmwareVersion: null,   latestFirmwareVersion: null },
     { assetNumber: 'SAF-GNSS-003', itemName: 'GNSS Rover Receiver',  equipmentType: 'GNSS Receiver', manufacturer: 'Septentrio', siteCode: 'EPF', ownership: 'owned', lastCalDaysAgo: 95, intervalDays: 90, cost: 15200, replacementCost: 18000, estimatedRepairCost: 0, damageStatus: 'ok', damageType: null, firmwareVersion: '5.5', latestFirmwareVersion: '5.5' },
-    { assetNumber: 'SAF-DC-022',   itemName: 'Field Data Collector', equipmentType: 'Data Collector', manufacturer: 'Carlson', siteCode: 'NVY', ownership: 'owned', lastCalDaysAgo: 28, intervalDays: 30, cost: 4200, replacementCost: 5000, estimatedRepairCost: 0, damageStatus: 'ok', damageType: null, firmwareVersion: '2.3', latestFirmwareVersion: '2.3' },
+    // In inventory (no site) — returned to stock, awaiting redeployment:
+    { assetNumber: 'SAF-GNSS-004', itemName: 'GNSS Rover Receiver',  equipmentType: 'GNSS Receiver', manufacturer: 'Trimble', siteCode: null, ownership: 'owned', lastCalDaysAgo: 40, intervalDays: 90, cost: 16900, replacementCost: 19500, estimatedRepairCost: 0, damageStatus: 'ok', damageType: null, firmwareVersion: '6.21', latestFirmwareVersion: '6.21' },
+    { assetNumber: 'SAF-TAB-031',  itemName: 'Rugged Field Tablet',  equipmentType: 'Tablet', manufacturer: 'Panasonic', siteCode: null, ownership: 'owned', lastCalDaysAgo: null, intervalDays: 30, cost: 2600, replacementCost: 2900, estimatedRepairCost: 0, damageStatus: 'ok', damageType: null, firmwareVersion: null, latestFirmwareVersion: null },
+    // Historical item at the retired site:
+    { assetNumber: 'SAF-TS-009',   itemName: 'Legacy Total Station', equipmentType: 'Total Station', manufacturer: 'Topcon', siteCode: 'RYD', ownership: 'owned', lastCalDaysAgo: 400, intervalDays: 90, cost: 9000, replacementCost: 12000, estimatedRepairCost: 0, damageStatus: 'ok', damageType: null, firmwareVersion: '3.1', latestFirmwareVersion: '3.4' },
+    // Disposed (sold) — kept for history, hidden from active lists:
+    { assetNumber: 'SAF-DC-019',   itemName: 'Field Data Collector', equipmentType: 'Data Collector', manufacturer: 'Carlson', siteCode: null, ownership: 'owned', lastCalDaysAgo: 300, intervalDays: 30, cost: 4200, replacementCost: 5000, estimatedRepairCost: 0, damageStatus: 'ok', damageType: null, firmwareVersion: '2.0', latestFirmwareVersion: '2.3', status: 'sold', dispositionNotes: 'Sold to a subcontractor, 2025.' },
   ];
 
-  const acquiredBase = daysFromNow(-400); // all acquired ~13 months ago, for depreciation
+  const acquiredBase = daysFromNow(-400);
+  const equipmentByAsset: Record<string, string> = {};
 
   for (const it of items) {
     const lastCal = it.lastCalDaysAgo === null ? null : daysFromNow(-it.lastCalDaysAgo);
@@ -148,12 +150,12 @@ async function main() {
     const nextDueIso = computeNextCalibrationDue(lastCalIso, it.intervalDays);
     const status = computeCalibrationStatus(nextDueIso);
 
-    await prisma.equipment.upsert({
+    const eq = await prisma.equipment.upsert({
       where: { organizationId_assetNumber: { organizationId: org.id, assetNumber: it.assetNumber } },
       update: {},
       create: {
         organizationId: org.id,
-        siteId: sites[it.siteCode],
+        siteId: it.siteCode ? sites[it.siteCode] : null,
         assetNumber: it.assetNumber,
         itemName: it.itemName,
         equipmentType: it.equipmentType,
@@ -172,9 +174,32 @@ async function main() {
         cost: it.cost,
         replacementCost: it.replacementCost,
         acquiredDate: acquiredBase,
-        status: 'active',
+        status: it.status ?? 'active',
+        dispositionNotes: it.dispositionNotes ?? null,
       },
     });
+    equipmentByAsset[it.assetNumber] = eq.id;
+  }
+
+  // ===========================================================================
+  // 5. CALIBRATION HISTORY (a couple of logged events, with the on-site user)
+  // ===========================================================================
+  if ((await prisma.calibrationRecord.count()) === 0) {
+    const history = [
+      { asset: 'SAF-GNSS-001', daysAgo: 5,  by: 'user_seed_sup_nvy', notes: 'Routine field calibration.' },
+      { asset: 'SAF-DC-020',   daysAgo: 25, by: 'user_seed_sup_srd', notes: 'Calibrated after firmware update.' },
+    ];
+    for (const h of history) {
+      await prisma.calibrationRecord.create({
+        data: {
+          organizationId: org.id,
+          equipmentId: equipmentByAsset[h.asset],
+          calibratedDate: daysFromNow(-h.daysAgo),
+          calibratedById: usersByClerk[h.by],
+          notes: h.notes,
+        },
+      });
+    }
   }
 
   const counts = {
@@ -182,6 +207,7 @@ async function main() {
     sites: await prisma.site.count(),
     users: await prisma.user.count(),
     equipment: await prisma.equipment.count(),
+    calibrationRecords: await prisma.calibrationRecord.count(),
   };
   console.log('Seed complete:', counts);
 }

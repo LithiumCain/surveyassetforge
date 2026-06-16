@@ -89,7 +89,7 @@ siteRoutes.get(
       const ninetyDaysMs = 90 * 86_400_000;
 
       const sites = await prisma.site.findMany({
-        where: { organizationId: orgId },
+        where: { organizationId: orgId, status: 'active' },
         select: {
           id: true,
           code: true,

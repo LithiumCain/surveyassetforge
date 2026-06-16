@@ -1,8 +1,9 @@
 import { NextFunction, Request, Response } from 'express';
-import { verifyToken } from '../services/auth.js';
-import { AuthUser } from '../types/auth.js';
+import { prisma } from '../lib/prisma.js';
+import { AuthUser, UserRole } from '../types/auth.js';
 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: AuthUser;
@@ -10,24 +11,38 @@ declare global {
   }
 }
 
-export const authenticate = (req: Request, res: Response, next: NextFunction): void => {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
-    res.status(401).json({ message: 'Missing or invalid authorization header' });
+// TODO(clerk): Replace this development shim with real Clerk session
+// verification. The shim resolves the request user from the `x-dev-user`
+// header (a seeded clerkUserId, defaulting to the demo admin). It is
+// HARD-DISABLED unless DEV_AUTH=1, so it can never authenticate anyone in a
+// production deployment — there it returns 401 until Clerk is wired.
+export const authenticate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  if (process.env.DEV_AUTH !== '1') {
+    res.status(401).json({ message: 'Authentication not configured (Clerk integration pending)' });
     return;
   }
 
-  const token = header.slice(7);
   try {
-    const payload = verifyToken(token);
+    const clerkUserId = (req.header('x-dev-user') ?? 'user_seed_admin').toString();
+    const user = await prisma.user.findUnique({ where: { clerkUserId } });
+
+    if (!user || !user.isActive) {
+      res.status(401).json({ message: 'Dev user not found or inactive' });
+      return;
+    }
+
     req.user = {
-      id: payload.sub,
-      role: payload.role,
-      siteId: payload.siteId,
-      username: payload.username,
+      id: user.id,
+      organizationId: user.organizationId,
+      role: user.role as UserRole,
+      siteId: user.siteId,
     };
     next();
-  } catch (_err) {
-    res.status(401).json({ message: 'Invalid token' });
+  } catch (err) {
+    next(err);
   }
 };

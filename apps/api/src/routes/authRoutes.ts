@@ -1,70 +1,27 @@
 import { Router } from 'express';
-import { z } from 'zod';
-import { prisma } from '../app.js';
+import { prisma } from '../lib/prisma.js';
 import { authenticate } from '../middleware/authenticate.js';
-import { comparePassword, signToken } from '../services/auth.js';
-import { UserRole } from '../types/auth.js';
-
-const loginSchema = z.object({
-  username: z.string(),
-  password: z.string().min(8),
-});
 
 export const authRoutes = Router();
 
-authRoutes.post('/login', async (req, res, next) => {
-  try {
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: 'Invalid request body' });
-    }
+// Login is handled by Clerk on the client; the API no longer issues tokens.
+// TODO(clerk): add a Clerk webhook to sync Clerk users/orgs -> our User table.
 
-    const { username, password } = parsed.data;
-    const user = await prisma.user.findUnique({
-      where: { username },
-    });
-
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-
-    const valid = await comparePassword(password, user.passwordHash);
-    if (!valid) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-
-    const token = signToken({
-      sub: user.id,
-      role: user.role,
-      siteId: user.siteId,
-      username: user.username,
-    });
-
-    return res.json({
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        siteId: user.siteId,
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
+// Who am I — returns the signed-in user with their org + site context.
 authRoutes.get('/users/me', authenticate, async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.id },
       select: {
         id: true,
-        username: true,
         email: true,
+        firstName: true,
+        lastName: true,
         role: true,
         siteId: true,
+        organizationId: true,
+        site: { select: { id: true, code: true, name: true } },
+        organization: { select: { id: true, name: true, slug: true } },
       },
     });
 

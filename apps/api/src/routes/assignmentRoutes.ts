@@ -1,21 +1,21 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../app.js';
-import { query } from '../config/db.js';
+import { prisma } from '../lib/prisma.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
+import { auditFromRequest } from '../services/audit.js';
 
 const assignSchema = z.object({
-  assignedToName:   z.string().min(1).max(120),
+  assignedToName: z.string().min(1).max(120),
   assignedToNumber: z.string().max(40).optional().nullable(),
-  notes:            z.string().max(500).optional().nullable(),
+  notes: z.string().max(500).optional().nullable(),
 });
 
 export const assignmentRoutes = Router();
 
 assignmentRoutes.use(authenticate);
 
-// ── Check out an asset to a person ──────────────────────────────
+// ── Check out a piece of equipment to a person ───────────────────
 assignmentRoutes.post(
   '/assets/:assetId/assign',
   authorize('super_admin', 'regional_director', 'site_supervisor'),
@@ -26,21 +26,24 @@ assignmentRoutes.post(
         return res.status(400).json({ message: 'Invalid request body', issues: parsed.error.issues });
       }
 
-      const assetResult = await query<{ site_id: string; asset_number: string }>(
-        'SELECT site_id, asset_number FROM assets WHERE id = $1',
-        [req.params.assetId],
-      );
-      if (!assetResult.rows[0]) {
+      const equipment = await prisma.equipment.findFirst({
+        where: { id: req.params.assetId, organizationId: req.user!.organizationId },
+        select: { id: true, siteId: true, assetNumber: true },
+      });
+      if (!equipment) {
         return res.status(404).json({ message: 'Asset not found' });
       }
-      const { site_id: siteId, asset_number: assetNumber } = assetResult.rows[0];
 
-      if (req.user!.role === 'site_supervisor' && req.user!.siteId !== siteId) {
+      if (req.user!.role === 'site_supervisor' && req.user!.siteId !== equipment.siteId) {
         return res.status(403).json({ message: 'Cannot assign assets outside your site' });
       }
 
       const active = await prisma.assetAssignment.findFirst({
-        where: { assetId: req.params.assetId, checkedInAt: null },
+        where: {
+          organizationId: req.user!.organizationId,
+          equipmentId: equipment.id,
+          checkedInAt: null,
+        },
       });
       if (active) {
         return res.status(409).json({ message: 'Asset already checked out. Check it in before reassigning.' });
@@ -48,23 +51,23 @@ assignmentRoutes.post(
 
       const assignment = await prisma.assetAssignment.create({
         data: {
-          assetId:          req.params.assetId,
-          assignedToName:   parsed.data.assignedToName,
+          organizationId: req.user!.organizationId,
+          equipmentId: equipment.id,
+          siteId: equipment.siteId,
+          assignedToName: parsed.data.assignedToName,
           assignedToNumber: parsed.data.assignedToNumber ?? null,
-          siteId,
-          notes:            parsed.data.notes ?? null,
-          assignedById:     req.user!.id,
+          notes: parsed.data.notes ?? null,
+          assignedById: req.user!.id,
         },
       });
 
-      await prisma.auditLog.create({
-        data: {
-          userId:   req.user!.id,
-          siteId,
-          action:   'ASSET_ASSIGNED',
-          field:    assetNumber,
-          newValue: parsed.data.assignedToName,
-        },
+      await auditFromRequest(req, {
+        action: 'assignment.created',
+        entityType: 'assignment',
+        entityId: assignment.id,
+        siteId: equipment.siteId,
+        field: equipment.assetNumber,
+        newValue: parsed.data.assignedToName,
       });
 
       return res.status(201).json(assignment);
@@ -74,14 +77,18 @@ assignmentRoutes.post(
   },
 );
 
-// ── Check in an asset ────────────────────────────────────────────
+// ── Check a piece of equipment back in ───────────────────────────
 assignmentRoutes.post(
   '/assets/:assetId/checkin',
   authorize('super_admin', 'regional_director', 'site_supervisor'),
   async (req, res, next) => {
     try {
       const active = await prisma.assetAssignment.findFirst({
-        where: { assetId: req.params.assetId, checkedInAt: null },
+        where: {
+          organizationId: req.user!.organizationId,
+          equipmentId: req.params.assetId,
+          checkedInAt: null,
+        },
       });
       if (!active) {
         return res.status(404).json({ message: 'No active assignment found for this asset' });
@@ -93,22 +100,15 @@ assignmentRoutes.post(
 
       const updated = await prisma.assetAssignment.update({
         where: { id: active.id },
-        data:  { checkedInAt: new Date() },
+        data: { checkedInAt: new Date() },
       });
 
-      const assetResult = await query<{ asset_number: string }>(
-        'SELECT asset_number FROM assets WHERE id = $1',
-        [req.params.assetId],
-      );
-
-      await prisma.auditLog.create({
-        data: {
-          userId:   req.user!.id,
-          siteId:   active.siteId,
-          action:   'ASSET_CHECKED_IN',
-          field:    assetResult.rows[0]?.asset_number ?? req.params.assetId,
-          oldValue: active.assignedToName,
-        },
+      await auditFromRequest(req, {
+        action: 'assignment.checked_in',
+        entityType: 'assignment',
+        entityId: active.id,
+        siteId: active.siteId,
+        oldValue: active.assignedToName,
       });
 
       return res.json(updated);
@@ -118,13 +118,13 @@ assignmentRoutes.post(
   },
 );
 
-// ── Custody history for one asset ────────────────────────────────
+// ── Custody history for one piece of equipment ───────────────────
 assignmentRoutes.get('/assets/:assetId/assignments', async (req, res, next) => {
   try {
     const assignments = await prisma.assetAssignment.findMany({
-      where:   { assetId: req.params.assetId },
+      where: { organizationId: req.user!.organizationId, equipmentId: req.params.assetId },
       include: {
-        assignedBy: { select: { username: true, firstName: true, lastName: true } },
+        assignedBy: { select: { firstName: true, lastName: true, email: true } },
       },
       orderBy: { checkedOutAt: 'desc' },
     });
@@ -134,17 +134,18 @@ assignmentRoutes.get('/assets/:assetId/assignments', async (req, res, next) => {
   }
 });
 
-// ── All currently active assignments (manager view) ───────────────
+// ── All currently active assignments (manager view) ──────────────
 assignmentRoutes.get(
   '/assignments/active',
   authorize('super_admin', 'regional_director'),
   async (req, res, next) => {
     try {
       const assignments = await prisma.assetAssignment.findMany({
-        where:   { checkedInAt: null },
+        where: { organizationId: req.user!.organizationId, checkedInAt: null },
         include: {
-          assignedBy: { select: { username: true } },
-          site:       { select: { code: true, name: true } },
+          assignedBy: { select: { firstName: true, lastName: true, email: true } },
+          equipment: { select: { assetNumber: true, itemName: true } },
+          site: { select: { code: true, name: true } },
         },
         orderBy: { checkedOutAt: 'desc' },
       });

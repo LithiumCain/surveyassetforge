@@ -1,25 +1,33 @@
-import { Asset, AssetAssignment, AssetPayload, AssignPayload, CreateSitePayload, Site, User } from '../types';
+import {
+  Asset,
+  AssetAssignment,
+  AssetPayload,
+  AssignPayload,
+  CreateSitePayload,
+  Site,
+  User,
+} from '../types';
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000/api/v1';
 
 class ApiClient {
-  private token: string | null = null;
+  // Async getter so we always send a fresh Clerk session token (it auto-refreshes).
+  private tokenGetter: (() => Promise<string | null>) | null = null;
 
-  setToken(token: string | null): void {
-    this.token = token;
+  setTokenGetter(getter: () => Promise<string | null>): void {
+    this.tokenGetter = getter;
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers);
     headers.set('Content-Type', 'application/json');
-    if (this.token) {
-      headers.set('Authorization', `Bearer ${this.token}`);
+
+    const token = this.tokenGetter ? await this.tokenGetter() : null;
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
     }
 
-    const response = await fetch(`${baseUrl}${path}`, {
-      ...init,
-      headers,
-    });
+    const response = await fetch(`${baseUrl}${path}`, { ...init, headers });
 
     if (!response.ok) {
       const text = await response.text();
@@ -33,13 +41,6 @@ class ApiClient {
     return response.json() as Promise<T>;
   }
 
-  login(username: string, password: string): Promise<{ token: string; user: User }> {
-    return this.request('/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    });
-  }
-
   getMe(): Promise<User> {
     return this.request('/users/me');
   }
@@ -49,10 +50,7 @@ class ApiClient {
   }
 
   createSite(payload: CreateSitePayload): Promise<Site> {
-    return this.request('/sites', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    return this.request('/sites', { method: 'POST', body: JSON.stringify(payload) });
   }
 
   getAssets(): Promise<Asset[]> {
@@ -60,43 +58,27 @@ class ApiClient {
   }
 
   createAsset(payload: AssetPayload): Promise<{ id: string }> {
-    return this.request('/assets', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    return this.request('/assets', { method: 'POST', body: JSON.stringify(payload) });
   }
 
   updateAsset(id: string, payload: AssetPayload): Promise<void> {
-    return this.request(`/assets/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
+    return this.request(`/assets/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
   }
 
   deleteAsset(id: string): Promise<void> {
-    return this.request(`/assets/${id}`, {
-      method: 'DELETE',
-    });
+    return this.request(`/assets/${id}`, { method: 'DELETE' });
   }
 
   scanAsset(assetNumber: string): Promise<Asset> {
-    return this.request('/scan/asset', {
-      method: 'POST',
-      body: JSON.stringify({ assetNumber }),
-    });
+    return this.request('/scan/asset', { method: 'POST', body: JSON.stringify({ assetNumber }) });
   }
 
   assignAsset(assetId: string, payload: AssignPayload): Promise<AssetAssignment> {
-    return this.request(`/assets/${assetId}/assign`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    return this.request(`/assets/${assetId}/assign`, { method: 'POST', body: JSON.stringify(payload) });
   }
 
   checkInAsset(assetId: string): Promise<AssetAssignment> {
-    return this.request(`/assets/${assetId}/checkin`, {
-      method: 'POST',
-    });
+    return this.request(`/assets/${assetId}/checkin`, { method: 'POST' });
   }
 
   getAssetHistory(assetId: string): Promise<AssetAssignment[]> {

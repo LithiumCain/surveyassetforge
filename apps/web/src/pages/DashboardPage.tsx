@@ -297,8 +297,8 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
         <div className="topbar-brand">
           <div className="topbar-logo">SAF</div>
           <div>
-            <h1>SurveyAssetForge</h1>
-            <p>{user.username} · {roleLabel[user.role] ?? user.role}</p>
+            <h1>Survey Asset Forge</h1>
+            <p>{[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || 'User'} · {roleLabel[user.role] ?? user.role}</p>
           </div>
         </div>
         <div className="topbar-right">

@@ -12,12 +12,15 @@ export type User = {
   organization?: { id: string; name: string; slug: string } | null;
 };
 
+export type SiteStatus = 'active' | 'inactive';
+
 export type Site = {
   id: string;
   name: string;
   code: string;
   city: string | null;
   state: string | null;
+  status?: SiteStatus;
 };
 
 export type CreateSitePayload = {

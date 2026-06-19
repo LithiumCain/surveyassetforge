@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import { verifyToken } from '@clerk/backend';
+import { verifyToken, createClerkClient } from '@clerk/backend';
 import { prisma } from '../lib/prisma.js';
 import { AuthUser, UserRole } from '../types/auth.js';
 
@@ -12,23 +12,46 @@ declare global {
   }
 }
 
+const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+
 type LocalUser = {
   id: string;
   organizationId: string;
   role: string;
   siteId: string | null;
   isActive: boolean;
+  email: string | null;
 };
 
-// Resolve the SAF user behind a verified Clerk identity.
-// If they have no local row yet and JIT provisioning is enabled (dev), create
-// one in the configured org/role. In production JIT is off => deny-by-default.
-const resolveLocalUser = async (
-  clerkUserId: string,
-  email: string | null,
-): Promise<LocalUser | null> => {
+// Pull name + email from Clerk for a user (best-effort; null on any failure).
+const fetchClerkProfile = async (clerkUserId: string) => {
+  try {
+    const cu = await clerk.users.getUser(clerkUserId);
+    return {
+      email: cu.primaryEmailAddress?.emailAddress ?? cu.emailAddresses[0]?.emailAddress ?? null,
+      firstName: cu.firstName ?? cu.username ?? null,
+      lastName: cu.lastName ?? null,
+    };
+  } catch {
+    return { email: null, firstName: null, lastName: null };
+  }
+};
+
+// Resolve the SAF user behind a verified Clerk identity, syncing profile fields.
+// Unknown users are denied unless dev JIT provisioning is enabled.
+const resolveLocalUser = async (clerkUserId: string): Promise<LocalUser | null> => {
   const existing = await prisma.user.findUnique({ where: { clerkUserId } });
-  if (existing) return existing;
+
+  if (existing) {
+    // Backfill name/email once (when email is still empty); cheap thereafter.
+    if (!existing.email) {
+      const profile = await fetchClerkProfile(clerkUserId);
+      if (profile.email || profile.firstName) {
+        return prisma.user.update({ where: { id: existing.id }, data: profile });
+      }
+    }
+    return existing;
+  }
 
   const jitSlug = process.env.CLERK_JIT_ORG_SLUG;
   if (!jitSlug) return null; // deny-by-default
@@ -37,8 +60,9 @@ const resolveLocalUser = async (
   if (!org) return null;
 
   const role = (process.env.CLERK_JIT_ROLE as UserRole) ?? 'super_admin';
+  const profile = await fetchClerkProfile(clerkUserId);
   return prisma.user.create({
-    data: { clerkUserId, organizationId: org.id, role, email },
+    data: { clerkUserId, organizationId: org.id, role, ...profile },
   });
 };
 
@@ -49,7 +73,6 @@ export const authenticate = async (
 ): Promise<void> => {
   try {
     // --- Dev-only test shim (automated testing): DEV_AUTH=1 + x-dev-user header.
-    //     Never used by real clients; lets us exercise the API without Clerk.
     if (process.env.DEV_AUTH === '1' && req.header('x-dev-user')) {
       const user = await prisma.user.findUnique({
         where: { clerkUserId: req.header('x-dev-user')! },
@@ -82,7 +105,7 @@ export const authenticate = async (
       return;
     }
 
-    let claims: { sub: string; email?: string };
+    let claims: { sub: string };
     try {
       claims = (await verifyToken(token, { secretKey })) as typeof claims;
     } catch {
@@ -90,7 +113,7 @@ export const authenticate = async (
       return;
     }
 
-    const user = await resolveLocalUser(claims.sub, claims.email ?? null);
+    const user = await resolveLocalUser(claims.sub);
     if (!user || !user.isActive) {
       res.status(401).json({ message: 'Your account is not provisioned for Survey Asset Forge' });
       return;

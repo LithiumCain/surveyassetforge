@@ -30,8 +30,17 @@ class ApiClient {
     const response = await fetch(`${baseUrl}${path}`, { ...init, headers });
 
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Request failed (${response.status})`);
+      // Surface the API's human-readable message, not the raw JSON body.
+      let message = `Something went wrong (${response.status})`;
+      try {
+        const body = await response.json();
+        if (body && typeof body.message === 'string') {
+          message = body.message;
+        }
+      } catch {
+        /* non-JSON error body — keep the generic message */
+      }
+      throw new Error(message);
     }
 
     if (response.status === 204) {

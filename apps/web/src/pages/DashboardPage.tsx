@@ -6,6 +6,7 @@ import { AssignModal } from '../components/AssignModal';
 import { CreateSiteModal } from '../components/CreateSiteModal';
 import { CustodyHistory } from '../components/CustodyHistory';
 import { RegionalAlerts } from '../components/RegionalAlerts';
+import { useToast } from '../components/Toast';
 import { Asset, AssetAssignment, AssetPayload, Site, User } from '../types';
 
 type Props = {
@@ -38,6 +39,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
   const [historyTarget, setHistoryTarget] = useState<Asset | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const formAnchorRef = useRef<HTMLDivElement | null>(null);
+  const toast = useToast();
 
   const siteCounts = useMemo(() => {
     return assets.reduce<Record<string, number>>((counts, asset) => {
@@ -199,6 +201,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
   }, [formOpen, editing]);
 
   const handleSave = async (payload: AssetPayload): Promise<void> => {
+    const isEdit = Boolean(editing);
     if (editing) {
       await apiClient.updateAsset(editing.id, payload);
     } else {
@@ -208,6 +211,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
     setEditing(undefined);
     setFormOpen(false);
     await loadData();
+    toast.push(isEdit ? 'Asset updated' : 'Asset created', 'success');
   };
 
   const handleEdit = (asset: Asset): void => {
@@ -270,9 +274,9 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
         delete next[asset.id];
         return next;
       });
-      setActionMessage(`${asset.assetNumber} checked in.`);
+      toast.push(`${asset.assetNumber} checked in`, 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Check-in failed');
+      toast.push(err instanceof Error ? err.message : 'Check-in failed', 'error');
     }
   };
 
@@ -281,7 +285,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
       setScanResult(await apiClient.scanAsset(scanInput));
     } catch (err) {
       setScanResult(null);
-      alert(err instanceof Error ? err.message : 'Asset not found');
+      toast.push(err instanceof Error ? err.message : 'Asset not found', 'error');
     }
   };
 

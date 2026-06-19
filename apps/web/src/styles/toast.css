@@ -1,0 +1,85 @@
+/* ================================================================
+   TOASTS
+   ================================================================ */
+
+.toaster {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 1000;
+  max-width: 480px;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--muted);
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: var(--shadow-lg);
+  animation: toast-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.toast-msg {
+  font-size: 16px;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.toast-x {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.toast-success {
+  border-left-color: var(--success);
+}
+.toast-success .toast-dot {
+  background: var(--success);
+}
+
+.toast-error {
+  border-left-color: var(--alert);
+}
+.toast-error .toast-dot {
+  background: var(--alert);
+}
+
+.toast-info {
+  border-left-color: var(--accent);
+}
+.toast-info .toast-dot {
+  background: var(--accent);
+}
+
+/* Slide in from the corner (off-screen right -> resting position). */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(120%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

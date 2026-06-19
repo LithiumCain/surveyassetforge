@@ -2,7 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { App } from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastProvider } from './components/Toast';
 import './styles/app.css';
+import './styles/toast.css';
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
 if (!publishableKey) {
@@ -11,8 +14,12 @@ if (!publishableKey) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ClerkProvider publishableKey={publishableKey} afterSignOutUrl="/">
-      <App />
-    </ClerkProvider>
+    <ErrorBoundary>
+      <ClerkProvider publishableKey={publishableKey} afterSignOutUrl="/">
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </ClerkProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

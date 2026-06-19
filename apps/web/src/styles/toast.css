@@ -4,38 +4,39 @@
 
 .toaster {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
+  right: 28px;
+  bottom: 28px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
   z-index: 1000;
-  max-width: 360px;
+  max-width: 480px;
 }
 
 .toast {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-left: 4px solid var(--muted);
-  border-radius: 12px;
-  padding: 12px 14px;
+  border-left: 5px solid var(--muted);
+  border-radius: 16px;
+  padding: 20px 24px;
   box-shadow: var(--shadow-lg);
-  animation: toast-in 0.2s ease-out;
+  animation: toast-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .toast-dot {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--muted);
   flex-shrink: 0;
 }
 
 .toast-msg {
-  font-size: 13px;
+  font-size: 16px;
+  font-weight: 500;
   color: #0f172a;
 }
 
@@ -43,11 +44,11 @@
   margin-left: auto;
   background: none;
   border: none;
-  font-size: 18px;
+  font-size: 24px;
   line-height: 1;
   color: var(--muted);
   cursor: pointer;
-  padding: 0 2px;
+  padding: 0 4px;
 }
 
 .toast-success {
@@ -71,13 +72,14 @@
   background: var(--accent);
 }
 
+/* Slide in from the corner (off-screen right -> resting position). */
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateX(120%);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateX(0);
   }
 }

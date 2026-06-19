@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
+import { exportAssetsCsv } from '../lib/csv';
 import { AssetForm } from '../components/AssetForm';
 import { AssetTable } from '../components/AssetTable';
 import { AssignModal } from '../components/AssignModal';
@@ -304,11 +305,28 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
           <div className="topbar-logo">SAF</div>
           <div>
             <h1>Survey Asset Forge</h1>
-            <p>{[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || 'User'} · {roleLabel[user.role] ?? user.role}</p>
+            <p>
+              {user.organization?.name ? `${user.organization.name} · ` : ''}
+              {[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || 'User'} · {roleLabel[user.role] ?? user.role}
+            </p>
           </div>
         </div>
         <div className="topbar-right">
           <span className="topbar-viewing">Viewing: {selectedSiteName}</span>
+          <button
+            onClick={() => {
+              exportAssetsCsv(filteredAssets);
+              toast.push(
+                `Exported ${filteredAssets.length} asset${filteredAssets.length !== 1 ? 's' : ''}`,
+                'success',
+              );
+            }}
+          >
+            Export CSV
+          </button>
+          <button onClick={() => toast.push('Import is coming soon — we’ll wire it to your spreadsheet', 'info')}>
+            Import
+          </button>
           <button onClick={onLogout}>Sign Out</button>
         </div>
       </header>

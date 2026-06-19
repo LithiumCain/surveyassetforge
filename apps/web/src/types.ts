@@ -98,6 +98,25 @@ export type AssignPayload = {
   notes: string | null;
 };
 
+export type CalibrationRecord = {
+  id: string;
+  calibratedDate: string;
+  photoUrl: string | null;
+  notes: string | null;
+  createdAt: string;
+  calibratedBy?: {
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  } | null;
+};
+
+export type CalibrationPayload = {
+  calibratedDate: string;
+  notes: string | null;
+  photoUrl?: string | null;
+};
+
 export type AssetPayload = {
   assetNumber: string;
   partNumber: string | null;

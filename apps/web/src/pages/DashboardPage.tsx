@@ -3,6 +3,7 @@ import { apiClient } from '../api/client';
 import { AssetForm } from '../components/AssetForm';
 import { AssetTable } from '../components/AssetTable';
 import { AssignModal } from '../components/AssignModal';
+import { CalibrationModal } from '../components/CalibrationModal';
 import { CreateSiteModal } from '../components/CreateSiteModal';
 import { CustodyHistory } from '../components/CustodyHistory';
 import { RegionalAlerts } from '../components/RegionalAlerts';
@@ -37,6 +38,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
   const [activeAssignments, setActiveAssignments] = useState<Record<string, AssetAssignment>>({});
   const [assignTarget, setAssignTarget] = useState<Asset | null>(null);
   const [historyTarget, setHistoryTarget] = useState<Asset | null>(null);
+  const [calibrationTarget, setCalibrationTarget] = useState<Asset | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const formAnchorRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
@@ -493,6 +495,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
           onAssign={setAssignTarget}
           onCheckIn={(asset) => void handleCheckIn(asset)}
           onViewHistory={setHistoryTarget}
+          onLogCalibration={setCalibrationTarget}
         />
       )}
 
@@ -512,6 +515,14 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
         <CustodyHistory
           asset={historyTarget}
           onClose={() => setHistoryTarget(null)}
+        />
+      )}
+
+      {calibrationTarget && (
+        <CalibrationModal
+          asset={calibrationTarget}
+          onLogged={() => void loadData()}
+          onClose={() => setCalibrationTarget(null)}
         />
       )}
 

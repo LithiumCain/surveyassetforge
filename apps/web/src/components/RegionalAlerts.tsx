@@ -21,8 +21,12 @@ export const RegionalAlerts = ({ assets, sites, onAddSite }: Props) => {
     type SiteBucket = { critical: number; overdue: number; dueNow: number };
     const siteMap: Record<string, SiteBucket> = {};
 
+    // Only count gear that lives at an active site (skip inactive sites + inventory).
+    const activeSiteIds = new Set(sites.filter((s) => s.status !== 'inactive').map((s) => s.id));
+
     for (const asset of assets) {
       if (!asset.nextCalibrationDue) continue;
+      if (!asset.siteId || !activeSiteIds.has(asset.siteId)) continue;
 
       const dueDate = new Date(asset.nextCalibrationDue);
       dueDate.setHours(0, 0, 0, 0);

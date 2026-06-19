@@ -2,19 +2,19 @@ import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import { Pool } from 'pg';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
 import { errorHandler } from './middleware/errorHandler.js';
 import { assetRoutes } from './routes/assetRoutes.js';
 import { assignmentRoutes } from './routes/assignmentRoutes.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { siteRoutes } from './routes/siteRoutes.js';
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+// Re-export the shared client so existing imports keep working.
+export { prisma } from './lib/prisma.js';
 
 export const app = express();
+
+// Behind Vercel's proxy — needed so req.ip is the real client IP (for audit).
+app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(cors());

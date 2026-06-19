@@ -2,11 +2,17 @@ export type UserRole = 'super_admin' | 'regional_director' | 'site_supervisor';
 
 export type User = {
   id: string;
-  username: string;
   email: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   role: UserRole;
   siteId: string | null;
+  organizationId?: string;
+  site?: { id: string; code: string; name: string } | null;
+  organization?: { id: string; name: string; slug: string } | null;
 };
+
+export type SiteStatus = 'active' | 'inactive';
 
 export type Site = {
   id: string;
@@ -14,6 +20,7 @@ export type Site = {
   code: string;
   city: string | null;
   state: string | null;
+  status?: SiteStatus;
 };
 
 export type CreateSitePayload = {

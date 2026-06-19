@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../app.js';
-import { query } from '../config/db.js';
+import { prisma } from '../lib/prisma.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
+import { auditFromRequest } from '../services/audit.js';
 
 const createSiteSchema = z.object({
   name: z.string().min(2),
@@ -14,105 +14,140 @@ const createSiteSchema = z.object({
 
 export const siteRoutes = Router();
 
+// List sites within the caller's organization (supervisors see only their own).
 siteRoutes.get('/sites', authenticate, async (req, res, next) => {
   try {
-    let sites;
+    const orgId = req.user!.organizationId;
+
     if (req.user!.role === 'super_admin' || req.user!.role === 'regional_director') {
-      sites = await prisma.site.findMany({
+      const sites = await prisma.site.findMany({
+        where: { organizationId: orgId },
         orderBy: { name: 'asc' },
       });
-    } else if (req.user!.role === 'site_supervisor' && req.user!.siteId) {
-      sites = await prisma.site.findMany({
-        where: { id: req.user!.siteId },
+      return res.json(sites);
+    }
+
+    if (req.user!.role === 'site_supervisor' && req.user!.siteId) {
+      const sites = await prisma.site.findMany({
+        where: { organizationId: orgId, id: req.user!.siteId },
       });
-    } else {
-      return res.status(403).json({ message: 'Forbidden' });
-    }
-    res.json(sites);
-  } catch (err) {
-    next(err);
-  }
-});
-
-siteRoutes.post('/sites', authenticate, authorize('super_admin', 'regional_director'), async (req, res, next) => {
-  try {
-    const parsed = createSiteSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: 'Invalid request body', issues: parsed.error.issues });
+      return res.json(sites);
     }
 
-    const { name, code, city, state } = parsed.data;
-    const site = await prisma.site.create({
-      data: {
-        name,
-        code: code.toUpperCase(),
-        city: city ?? null,
-        state: state ?? null,
-      },
-    });
-
-    return res.status(201).json(site);
+    return res.status(403).json({ message: 'Forbidden' });
   } catch (err) {
     next(err);
   }
 });
 
-siteRoutes.get('/dashboard/regional', authenticate, authorize('super_admin', 'regional_director'), async (req, res, next) => {
-  try {
-    type AlertRow = {
-      site_id: string;
-      site_code: string;
-      site_name: string;
-      city: string | null;
-      state: string | null;
-      critical_count: string;
-      overdue_count: string;
-      due_now_count: string;
-    };
+siteRoutes.post(
+  '/sites',
+  authenticate,
+  authorize('super_admin', 'regional_director'),
+  async (req, res, next) => {
+    try {
+      const parsed = createSiteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Invalid request body', issues: parsed.error.issues });
+      }
 
-    const siteResult = await query<AlertRow>(
-      `SELECT
-        s.id    AS site_id,
-        s.code  AS site_code,
-        s.name  AS site_name,
-        s.city,
-        s.state,
-        COUNT(CASE WHEN a.next_calibration_due < NOW() - INTERVAL '90 days' THEN 1 END)::int                                                                   AS critical_count,
-        COUNT(CASE WHEN a.next_calibration_due >= NOW() - INTERVAL '90 days' AND a.next_calibration_due < NOW() - INTERVAL '30 days' THEN 1 END)::int          AS overdue_count,
-        COUNT(CASE WHEN a.next_calibration_due >= NOW() - INTERVAL '30 days' AND a.next_calibration_due <= NOW() + INTERVAL '30 days' THEN 1 END)::int          AS due_now_count
-      FROM sites s
-      LEFT JOIN assets a ON a.site_id = s.id
-      GROUP BY s.id, s.code, s.name, s.city, s.state
-      ORDER BY (COUNT(CASE WHEN a.next_calibration_due < NOW() - INTERVAL '90 days' THEN 1 END) + COUNT(CASE WHEN a.next_calibration_due >= NOW() - INTERVAL '90 days' AND a.next_calibration_due < NOW() THEN 1 END)) DESC, s.name ASC`,
-      [],
-    );
+      const { name, code, city, state } = parsed.data;
+      const site = await prisma.site.create({
+        data: {
+          organizationId: req.user!.organizationId,
+          name,
+          code: code.toUpperCase(),
+          city: city ?? null,
+          state: state ?? null,
+        },
+      });
 
-    const siteAlerts = siteResult.rows
-      .map((row) => ({
-        siteId: row.site_id,
-        siteCode: row.site_code,
-        siteName: row.site_name,
-        city: row.city,
-        state: row.state,
-        criticalCount: Number(row.critical_count),
-        overdueCount: Number(row.overdue_count),
-        dueNowCount: Number(row.due_now_count),
-        totalIssues: Number(row.critical_count) + Number(row.overdue_count) + Number(row.due_now_count),
-      }))
-      .filter((s) => s.totalIssues > 0);
+      await auditFromRequest(req, {
+        action: 'site.created',
+        entityType: 'site',
+        entityId: site.id,
+        siteId: site.id,
+        newValue: site.code,
+      });
 
-    const totals = siteAlerts.reduce(
-      (acc, s) => {
-        acc.critical += s.criticalCount;
-        acc.overdue += s.overdueCount;
-        acc.dueNow += s.dueNowCount;
-        return acc;
-      },
-      { critical: 0, overdue: 0, dueNow: 0 },
-    );
+      return res.status(201).json(site);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
-    return res.json({ alerts: totals, siteAlerts });
-  } catch (err) {
-    next(err);
-  }
-});
+// Regional dashboard — per-site calibration issue counts, org-scoped.
+siteRoutes.get(
+  '/dashboard/regional',
+  authenticate,
+  authorize('super_admin', 'regional_director'),
+  async (req, res, next) => {
+    try {
+      const orgId = req.user!.organizationId;
+      const today = Date.now();
+      const ninetyDaysMs = 90 * 86_400_000;
+
+      const sites = await prisma.site.findMany({
+        where: { organizationId: orgId, status: 'active' },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          city: true,
+          state: true,
+          equipment: {
+            where: { status: 'active' },
+            select: { calibrationStatus: true, nextCalibrationDue: true },
+          },
+        },
+        orderBy: { name: 'asc' },
+      });
+
+      const siteAlerts = sites
+        .map((s) => {
+          let criticalCount = 0; // overdue by more than 90 days
+          let overdueCount = 0; // overdue within 90 days
+          let dueNowCount = 0; // due soon / warning window
+
+          for (const e of s.equipment) {
+            if (e.calibrationStatus === 'overdue') {
+              const due = e.nextCalibrationDue ? e.nextCalibrationDue.getTime() : today;
+              if (today - due > ninetyDaysMs) criticalCount += 1;
+              else overdueCount += 1;
+            } else if (e.calibrationStatus === 'due_soon' || e.calibrationStatus === 'warning') {
+              dueNowCount += 1;
+            }
+          }
+
+          return {
+            siteId: s.id,
+            siteCode: s.code,
+            siteName: s.name,
+            city: s.city,
+            state: s.state,
+            criticalCount,
+            overdueCount,
+            dueNowCount,
+            totalIssues: criticalCount + overdueCount + dueNowCount,
+          };
+        })
+        .filter((s) => s.totalIssues > 0)
+        .sort((a, b) => b.totalIssues - a.totalIssues || a.siteName.localeCompare(b.siteName));
+
+      const totals = siteAlerts.reduce(
+        (acc, s) => {
+          acc.critical += s.criticalCount;
+          acc.overdue += s.overdueCount;
+          acc.dueNow += s.dueNowCount;
+          return acc;
+        },
+        { critical: 0, overdue: 0, dueNow: 0 },
+      );
+
+      return res.json({ alerts: totals, siteAlerts });
+    } catch (err) {
+      next(err);
+    }
+  },
+);

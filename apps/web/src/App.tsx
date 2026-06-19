@@ -65,5 +65,5 @@ const AuthedApp = () => {
     );
   }
 
-  return <DashboardPage user={user} onLogout={() => void signOut()} />;
+  return <DashboardPage user={user} />;
 };

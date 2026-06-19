@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { UserButton } from '@clerk/clerk-react';
 import { apiClient } from '../api/client';
 import { exportAssetsCsv } from '../lib/csv';
 import { AssetForm } from '../components/AssetForm';
@@ -13,10 +14,9 @@ import { Asset, AssetAssignment, AssetPayload, Site, User } from '../types';
 
 type Props = {
   user: User;
-  onLogout: () => void;
 };
 
-export const DashboardPage = ({ user, onLogout }: Props) => {
+export const DashboardPage = ({ user }: Props) => {
   const [sites, setSites] = useState<Site[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(
@@ -327,7 +327,7 @@ export const DashboardPage = ({ user, onLogout }: Props) => {
           <button onClick={() => toast.push('Import is coming soon — we’ll wire it to your spreadsheet', 'info')}>
             Import
           </button>
-          <button onClick={onLogout}>Sign Out</button>
+          <UserButton afterSignOutUrl="/" />
         </div>
       </header>
 

@@ -3,6 +3,8 @@ import {
   AssetAssignment,
   AssetPayload,
   AssignPayload,
+  CalibrationPayload,
+  CalibrationRecord,
   CreateSitePayload,
   Site,
   User,
@@ -96,6 +98,17 @@ class ApiClient {
 
   getActiveAssignments(): Promise<AssetAssignment[]> {
     return this.request('/assignments/active');
+  }
+
+  getCalibrations(assetId: string): Promise<CalibrationRecord[]> {
+    return this.request(`/assets/${assetId}/calibrations`);
+  }
+
+  logCalibration(assetId: string, payload: CalibrationPayload): Promise<CalibrationRecord> {
+    return this.request(`/assets/${assetId}/calibrations`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 }
 

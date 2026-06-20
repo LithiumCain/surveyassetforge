@@ -9,6 +9,7 @@ type Props = {
   onAssign: (asset: Asset) => void;
   onCheckIn: (asset: Asset) => void;
   onViewHistory: (asset: Asset) => void;
+  onLogCalibration: (asset: Asset) => void;
 };
 
 export const AssetTable = ({
@@ -20,6 +21,7 @@ export const AssetTable = ({
   onAssign,
   onCheckIn,
   onViewHistory,
+  onLogCalibration,
 }: Props) => {
   return (
     <div className="card">
@@ -94,6 +96,20 @@ export const AssetTable = ({
                   <td>${Number(asset.currentValue ?? 0).toLocaleString()}</td>
                   <td>
                     <div className="row-actions">
+                      {/* Log calibration */}
+                      <button
+                        className="icon-action calibrate"
+                        type="button"
+                        title="Log calibration"
+                        onClick={() => onLogCalibration(asset)}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 14a8 8 0 0 1 16 0" />
+                          <path d="M12 14l4-3" />
+                          <circle cx="12" cy="14" r="1.2" />
+                        </svg>
+                      </button>
+
                       {/* History */}
                       <button
                         className="icon-action"

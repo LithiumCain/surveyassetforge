@@ -10,6 +10,7 @@ import { CreateSiteModal } from '../components/CreateSiteModal';
 import { CustodyHistory } from '../components/CustodyHistory';
 import { DispositionModal } from '../components/DispositionModal';
 import { RegionalAlerts } from '../components/RegionalAlerts';
+import { ScannerModal } from '../components/ScannerModal';
 import { useToast } from '../components/Toast';
 import { Asset, AssetAssignment, AssetPayload, Site, User } from '../types';
 
@@ -41,6 +42,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
   const [assignTarget, setAssignTarget] = useState<Asset | null>(null);
   const [historyTarget, setHistoryTarget] = useState<Asset | null>(null);
   const [calibrationTarget, setCalibrationTarget] = useState<Asset | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const formAnchorRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
@@ -234,9 +236,11 @@ export const DashboardPage = ({ user, onTab }: Props) => {
     }
   };
 
-  const handleScanLookup = async (): Promise<void> => {
+  const handleScanLookup = async (value: string = scanInput): Promise<void> => {
+    const query = value.trim();
+    if (!query) return;
     try {
-      setScanResult(await apiClient.scanAsset(scanInput));
+      setScanResult(await apiClient.scanAsset(query));
     } catch (err) {
       setScanResult(null);
       toast.push(err instanceof Error ? err.message : 'Asset not found', 'error');
@@ -348,10 +352,11 @@ export const DashboardPage = ({ user, onTab }: Props) => {
 
       <section className="card scan-box">
         <h3>Scan Lookup</h3>
-        <p>Manual fallback for barcode scanner workflow. Camera scan can be added using Html5-QRCode.</p>
+        <p>Scan a barcode or QR code with your camera, or type the asset number.</p>
         <div className="inline-controls">
-          <input value={scanInput} onChange={(e) => setScanInput(e.target.value)} placeholder="Search Assets" />
-          <button onClick={() => void handleScanLookup()}>Lookup</button>
+          <input value={scanInput} onChange={(e) => setScanInput(e.target.value)} placeholder="Asset number" />
+          <button type="button" onClick={() => void handleScanLookup()}>Lookup</button>
+          <button type="button" className="secondary-button" onClick={() => setScannerOpen(true)}>Scan</button>
         </div>
         {scanResult && (
           <p className="scan-result">
@@ -459,6 +464,17 @@ export const DashboardPage = ({ user, onTab }: Props) => {
           asset={dispositionTarget}
           onDisposed={() => void handleDisposed()}
           onClose={() => setDispositionTarget(null)}
+        />
+      )}
+
+      {scannerOpen && (
+        <ScannerModal
+          onScan={(text) => {
+            setScannerOpen(false);
+            setScanInput(text);
+            void handleScanLookup(text);
+          }}
+          onClose={() => setScannerOpen(false)}
         />
       )}
 

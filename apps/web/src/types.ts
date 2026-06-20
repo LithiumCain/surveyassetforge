@@ -117,6 +117,13 @@ export type CalibrationPayload = {
   photoUrl?: string | null;
 };
 
+export type DispositionStatus = 'sold' | 'lost' | 'stolen' | 'written_off';
+
+export type DispositionPayload = {
+  status: DispositionStatus;
+  notes: string | null;
+};
+
 export type AssetPayload = {
   assetNumber: string;
   partNumber: string | null;

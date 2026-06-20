@@ -6,6 +6,7 @@ import {
   CalibrationPayload,
   CalibrationRecord,
   CreateSitePayload,
+  DispositionPayload,
   Site,
   User,
 } from '../types';
@@ -78,6 +79,13 @@ class ApiClient {
 
   deleteAsset(id: string): Promise<void> {
     return this.request(`/assets/${id}`, { method: 'DELETE' });
+  }
+
+  disposeAsset(id: string, payload: DispositionPayload): Promise<void> {
+    return this.request(`/assets/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify(payload),
+    });
   }
 
   scanAsset(assetNumber: string): Promise<Asset> {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { UserButton } from '@clerk/clerk-react';
 import { apiClient } from '../api/client';
 import { exportAssetsCsv } from '../lib/csv';
+import { TopBar, type Tab } from '../components/TopBar';
 import { AssetForm } from '../components/AssetForm';
 import { AssetTable } from '../components/AssetTable';
 import { AssignModal } from '../components/AssignModal';
@@ -14,9 +14,10 @@ import { Asset, AssetAssignment, AssetPayload, Site, User } from '../types';
 
 type Props = {
   user: User;
+  onTab: (tab: Tab) => void;
 };
 
-export const DashboardPage = ({ user }: Props) => {
+export const DashboardPage = ({ user, onTab }: Props) => {
   const [sites, setSites] = useState<Site[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(
@@ -292,44 +293,25 @@ export const DashboardPage = ({ user }: Props) => {
     }
   };
 
-  const roleLabel: Record<string, string> = {
-    super_admin: 'Super Admin',
-    regional_director: 'Regional Director',
-    site_supervisor: 'Site Supervisor',
-  };
-
   return (
     <main className="layout">
-      <header className="topbar">
-        <div className="topbar-brand">
-          <div className="topbar-logo">SAF</div>
-          <div>
-            <h1>Survey Asset Forge</h1>
-            <p>
-              {user.organization?.name ? `${user.organization.name} · ` : ''}
-              {[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || 'User'} · {roleLabel[user.role] ?? user.role}
-            </p>
-          </div>
-        </div>
-        <div className="topbar-right">
-          <span className="topbar-viewing">Viewing: {selectedSiteName}</span>
-          <button
-            onClick={() => {
-              exportAssetsCsv(filteredAssets);
-              toast.push(
-                `Exported ${filteredAssets.length} asset${filteredAssets.length !== 1 ? 's' : ''}`,
-                'success',
-              );
-            }}
-          >
-            Export CSV
-          </button>
-          <button onClick={() => toast.push('Import is coming soon — we’ll wire it to your spreadsheet', 'info')}>
-            Import
-          </button>
-          <UserButton afterSignOutUrl="/" />
-        </div>
-      </header>
+      <TopBar user={user} tab="dashboard" onTab={onTab}>
+        <span className="topbar-viewing">Viewing: {selectedSiteName}</span>
+        <button
+          onClick={() => {
+            exportAssetsCsv(filteredAssets);
+            toast.push(
+              `Exported ${filteredAssets.length} asset${filteredAssets.length !== 1 ? 's' : ''}`,
+              'success',
+            );
+          }}
+        >
+          Export CSV
+        </button>
+        <button onClick={() => toast.push('Import is coming soon — we’ll wire it to your spreadsheet', 'info')}>
+          Import
+        </button>
+      </TopBar>
 
       {(user.role === 'super_admin' || user.role === 'regional_director') && (
         <RegionalAlerts

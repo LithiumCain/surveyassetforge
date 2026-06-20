@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { SignedIn, SignedOut, SignIn, useAuth } from '@clerk/clerk-react';
 import { apiClient } from './api/client';
 import { DashboardPage } from './pages/DashboardPage';
+import { ReportsPage } from './pages/ReportsPage';
+import type { Tab } from './components/TopBar';
 import { User } from './types';
 
 export const App = () => (
@@ -35,6 +37,7 @@ const AuthedApp = () => {
   const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('dashboard');
 
   useEffect(() => {
     apiClient.setTokenGetter(() => getToken());
@@ -65,5 +68,9 @@ const AuthedApp = () => {
     );
   }
 
-  return <DashboardPage user={user} />;
+  return tab === 'reports' ? (
+    <ReportsPage user={user} onTab={setTab} />
+  ) : (
+    <DashboardPage user={user} onTab={setTab} />
+  );
 };

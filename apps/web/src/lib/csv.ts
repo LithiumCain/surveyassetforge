@@ -1,6 +1,33 @@
 import { Asset } from '../types';
 
-const COLUMNS: [string, (a: Asset) => string | number | null][] = [
+const escapeCell = (value: unknown): string => {
+  const s = value === null || value === undefined ? '' : String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+const triggerDownload = (filename: string, csv: string): void => {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+// Generic CSV download from a header row + data rows.
+export const downloadCsv = (
+  filename: string,
+  header: string[],
+  rows: (string | number | null)[][],
+): void => {
+  const csv = [header.join(','), ...rows.map((r) => r.map(escapeCell).join(','))].join('\n');
+  triggerDownload(filename, csv);
+};
+
+const ASSET_COLUMNS: [string, (a: Asset) => string | number | null][] = [
   ['Asset #', (a) => a.assetNumber],
   ['Item', (a) => a.itemName],
   ['Manufacturer', (a) => a.manufacturer],
@@ -16,24 +43,13 @@ const COLUMNS: [string, (a: Asset) => string | number | null][] = [
   ['Serial #', (a) => a.serialNumber],
 ];
 
-const escapeCell = (value: unknown): string => {
-  const s = value === null || value === undefined ? '' : String(value);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-};
+const stamp = () => new Date().toISOString().slice(0, 10);
 
-// Build a CSV from the given assets and trigger a browser download.
+// Export the given assets as a CSV download.
 export const exportAssetsCsv = (rows: Asset[]): void => {
-  const header = COLUMNS.map((c) => c[0]).join(',');
-  const body = rows.map((a) => COLUMNS.map((c) => escapeCell(c[1](a))).join(',')).join('\n');
-  const csv = `${header}\n${body}`;
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `saf-assets-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  downloadCsv(
+    `saf-assets-${stamp()}.csv`,
+    ASSET_COLUMNS.map((c) => c[0]),
+    rows.map((a) => ASSET_COLUMNS.map((c) => c[1](a))),
+  );
 };

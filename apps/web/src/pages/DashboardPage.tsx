@@ -8,7 +8,9 @@ import { AssignModal } from '../components/AssignModal';
 import { CalibrationModal } from '../components/CalibrationModal';
 import { CreateSiteModal } from '../components/CreateSiteModal';
 import { CustodyHistory } from '../components/CustodyHistory';
+import { DispositionModal } from '../components/DispositionModal';
 import { RegionalAlerts } from '../components/RegionalAlerts';
+import { ScannerModal } from '../components/ScannerModal';
 import { useToast } from '../components/Toast';
 import { Asset, AssetAssignment, AssetPayload, Site, User } from '../types';
 
@@ -33,15 +35,14 @@ export const DashboardPage = ({ user, onTab }: Props) => {
   const [editing, setEditing] = useState<Asset | undefined>(undefined);
   const [scanInput, setScanInput] = useState('');
   const [scanResult, setScanResult] = useState<Asset | null>(null);
-  const [deleteCandidate, setDeleteCandidate] = useState<Asset | null>(null);
-  const [pendingUndoDelete, setPendingUndoDelete] = useState<Asset | null>(null);
+  const [dispositionTarget, setDispositionTarget] = useState<Asset | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [createSiteOpen, setCreateSiteOpen] = useState(false);
   const [activeAssignments, setActiveAssignments] = useState<Record<string, AssetAssignment>>({});
   const [assignTarget, setAssignTarget] = useState<Asset | null>(null);
   const [historyTarget, setHistoryTarget] = useState<Asset | null>(null);
   const [calibrationTarget, setCalibrationTarget] = useState<Asset | null>(null);
-  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const formAnchorRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
@@ -189,14 +190,6 @@ export const DashboardPage = ({ user, onTab }: Props) => {
   }, [selectedSiteId, sites, user.role, user.siteId]);
 
   useEffect(() => {
-    return () => {
-      if (deleteTimerRef.current) {
-        clearTimeout(deleteTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     if (!formOpen) {
       return;
     }
@@ -224,49 +217,8 @@ export const DashboardPage = ({ user, onTab }: Props) => {
     setActionMessage(`Editing ${asset.assetNumber}`);
   };
 
-  const requestDelete = (asset: Asset): void => {
-    setDeleteCandidate(asset);
-    setActionMessage(null);
-  };
-
-  const confirmDelete = (): void => {
-    if (!deleteCandidate) {
-      return;
-    }
-
-    const asset = deleteCandidate;
-    setDeleteCandidate(null);
-    setPendingUndoDelete(asset);
-    setAssets((current) => current.filter((item) => item.id !== asset.id));
-    setActionMessage(`${asset.assetNumber} removed. Undo available for 5 seconds.`);
-
-    if (deleteTimerRef.current) {
-      clearTimeout(deleteTimerRef.current);
-    }
-
-    deleteTimerRef.current = setTimeout(() => {
-      void apiClient.deleteAsset(asset.id).catch(async (err) => {
-        setError(err instanceof Error ? err.message : 'Delete failed');
-        await loadData();
-      }).finally(() => {
-        setPendingUndoDelete((current) => (current?.id === asset.id ? null : current));
-        deleteTimerRef.current = null;
-      });
-    }, 5000);
-  };
-
-  const undoDelete = async (): Promise<void> => {
-    if (!pendingUndoDelete) {
-      return;
-    }
-
-    if (deleteTimerRef.current) {
-      clearTimeout(deleteTimerRef.current);
-      deleteTimerRef.current = null;
-    }
-
-    setActionMessage(`${pendingUndoDelete.assetNumber} restored.`);
-    setPendingUndoDelete(null);
+  const handleDisposed = async (): Promise<void> => {
+    setDispositionTarget(null);
     await loadData();
   };
 
@@ -284,9 +236,11 @@ export const DashboardPage = ({ user, onTab }: Props) => {
     }
   };
 
-  const handleScanLookup = async (): Promise<void> => {
+  const handleScanLookup = async (value: string = scanInput): Promise<void> => {
+    const query = value.trim();
+    if (!query) return;
     try {
-      setScanResult(await apiClient.scanAsset(scanInput));
+      setScanResult(await apiClient.scanAsset(query));
     } catch (err) {
       setScanResult(null);
       toast.push(err instanceof Error ? err.message : 'Asset not found', 'error');
@@ -398,10 +352,11 @@ export const DashboardPage = ({ user, onTab }: Props) => {
 
       <section className="card scan-box">
         <h3>Scan Lookup</h3>
-        <p>Manual fallback for barcode scanner workflow. Camera scan can be added using Html5-QRCode.</p>
+        <p>Scan a barcode or QR code with your camera, or type the asset number.</p>
         <div className="inline-controls">
-          <input value={scanInput} onChange={(e) => setScanInput(e.target.value)} placeholder="Search Assets" />
-          <button onClick={() => void handleScanLookup()}>Lookup</button>
+          <input value={scanInput} onChange={(e) => setScanInput(e.target.value)} placeholder="Asset number" />
+          <button type="button" onClick={() => void handleScanLookup()}>Lookup</button>
+          <button type="button" className="secondary-button" onClick={() => setScannerOpen(true)}>Scan</button>
         </div>
         {scanResult && (
           <p className="scan-result">
@@ -411,29 +366,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
       </section>
 
 
-      {deleteCandidate && (
-        <section className="card confirm-strip">
-          <div>
-            <h3>Delete Asset?</h3>
-            <p>
-              Delete <strong>{deleteCandidate.assetNumber}</strong>? You will have 5 seconds to undo after confirming.
-            </p>
-          </div>
-          <div className="confirm-actions">
-            <button type="button" className="secondary-button" onClick={() => setDeleteCandidate(null)}>Cancel</button>
-            <button type="button" className="danger-button" onClick={confirmDelete}>Delete</button>
-          </div>
-        </section>
-      )}
-
-      {pendingUndoDelete && !deleteCandidate && (
-        <section className="card undo-strip">
-          <p>{actionMessage}</p>
-          <button type="button" className="secondary-button" onClick={() => void undoDelete()}>Undo</button>
-        </section>
-      )}
-
-      {actionMessage && !pendingUndoDelete && !deleteCandidate && (
+      {actionMessage && (
         <section className="card status-strip">
           <p>{actionMessage}</p>
         </section>
@@ -491,7 +424,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
           user={user}
           activeAssignments={activeAssignments}
           onEdit={handleEdit}
-          onDelete={requestDelete}
+          onDelete={setDispositionTarget}
           onAssign={setAssignTarget}
           onCheckIn={(asset) => void handleCheckIn(asset)}
           onViewHistory={setHistoryTarget}
@@ -523,6 +456,25 @@ export const DashboardPage = ({ user, onTab }: Props) => {
           asset={calibrationTarget}
           onLogged={() => void loadData()}
           onClose={() => setCalibrationTarget(null)}
+        />
+      )}
+
+      {dispositionTarget && (
+        <DispositionModal
+          asset={dispositionTarget}
+          onDisposed={() => void handleDisposed()}
+          onClose={() => setDispositionTarget(null)}
+        />
+      )}
+
+      {scannerOpen && (
+        <ScannerModal
+          onScan={(text) => {
+            setScannerOpen(false);
+            setScanInput(text);
+            void handleScanLookup(text);
+          }}
+          onClose={() => setScannerOpen(false)}
         />
       )}
 

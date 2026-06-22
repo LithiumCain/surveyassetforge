@@ -14,6 +14,13 @@ declare global {
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 
+// Optional JIT allowlist. When set, only these emails may be auto-provisioned;
+// every other sign-up is denied even with JIT on. Unset = no restriction (dev).
+const jitAllowedEmails = (process.env.CLERK_JIT_ALLOWED_EMAILS ?? '')
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
 type LocalUser = {
   id: string;
   organizationId: string;
@@ -59,8 +66,16 @@ const resolveLocalUser = async (clerkUserId: string): Promise<LocalUser | null> 
   const org = await prisma.organization.findUnique({ where: { slug: jitSlug } });
   if (!org) return null;
 
-  const role = (process.env.CLERK_JIT_ROLE as UserRole) ?? 'super_admin';
   const profile = await fetchClerkProfile(clerkUserId);
+
+  // Lockdown: when an allowlist is configured, deny any sign-up whose email is
+  // not on it — no account is created. Existing users never reach this code.
+  if (jitAllowedEmails.length > 0) {
+    const email = profile.email?.toLowerCase() ?? null;
+    if (!email || !jitAllowedEmails.includes(email)) return null;
+  }
+
+  const role = (process.env.CLERK_JIT_ROLE as UserRole) ?? 'super_admin';
   return prisma.user.create({
     data: { clerkUserId, organizationId: org.id, role, ...profile },
   });

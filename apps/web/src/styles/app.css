@@ -454,6 +454,35 @@ td:first-child { font-weight: 600; color: var(--primary); font-size: 12px; }
   align-items: center;
 }
 
+/* ----- Bulk-edit grid ----- */
+.bulk-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 4px 4px 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.bulk-grid td { vertical-align: middle; }
+
+.bulk-grid select,
+.bulk-grid input {
+  width: 100%;
+  min-width: 90px;
+  font-size: 13px;
+  padding: 6px 8px;
+}
+
+.bulk-grid tr.bulk-dirty td {
+  background: #fffbeb; /* amber-50: this row has unsaved changes */
+}
+.bulk-grid tr.bulk-dirty td:first-child {
+  box-shadow: inset 3px 0 0 var(--warning);
+}
+
 
 /* ================================================================
    CONFIRM / UNDO / STATUS STRIPS

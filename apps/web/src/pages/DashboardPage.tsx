@@ -4,6 +4,7 @@ import { exportAssetsCsv } from '../lib/csv';
 import { TopBar, type Tab } from '../components/TopBar';
 import { AssetForm } from '../components/AssetForm';
 import { AssetTable } from '../components/AssetTable';
+import { BulkEditGrid } from '../components/BulkEditGrid';
 import { AssignModal } from '../components/AssignModal';
 import { CalibrationModal } from '../components/CalibrationModal';
 import { CreateSiteModal } from '../components/CreateSiteModal';
@@ -43,6 +44,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
   const [historyTarget, setHistoryTarget] = useState<Asset | null>(null);
   const [calibrationTarget, setCalibrationTarget] = useState<Asset | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [bulkEdit, setBulkEdit] = useState(false);
   const formAnchorRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
@@ -394,6 +396,14 @@ export const DashboardPage = ({ user, onTab }: Props) => {
                 <option value="currentValueAsc">Value: Low–High</option>
               </select>
             </label>
+            {user.role === 'super_admin' && (
+              <button
+                className="secondary-button"
+                onClick={() => setBulkEdit((v) => !v)}
+              >
+                {bulkEdit ? 'Done editing' : 'Bulk edit'}
+              </button>
+            )}
             {(user.role === 'super_admin' || user.role === 'site_supervisor') && (
               <button onClick={() => { setEditing(undefined); setFormOpen(true); }}>+ Add Asset</button>
             )}
@@ -418,6 +428,16 @@ export const DashboardPage = ({ user, onTab }: Props) => {
 
       {loading ? (
         <section className="card"><p>Loading assets...</p></section>
+      ) : bulkEdit ? (
+        <BulkEditGrid
+          assets={filteredAssets}
+          sites={sites}
+          onSaved={() => {
+            setBulkEdit(false);
+            void loadData();
+          }}
+          onCancel={() => setBulkEdit(false)}
+        />
       ) : (
         <AssetTable
           assets={filteredAssets}

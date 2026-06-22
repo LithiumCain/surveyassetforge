@@ -771,6 +771,83 @@ td:first-child { font-weight: 600; color: var(--primary); font-size: 12px; }
   gap: 12px;
 }
 
+/* ----- Multi-step wizard (Create New Site) ----- */
+.wizard-steps {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+}
+
+.wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Connector line that fills the gap to the next step. */
+.wizard-step:not(:last-child) { flex: 1; }
+.wizard-step:not(:last-child)::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.wizard-step.done:not(:last-child)::after { background: var(--accent); }
+
+.wizard-step-dot {
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wizard-step.active .wizard-step-dot { background: var(--primary); color: #fff; }
+.wizard-step.done .wizard-step-dot { background: var(--accent); color: #00211f; }
+.wizard-step.active .wizard-step-label,
+.wizard-step.done .wizard-step-label { color: var(--primary); }
+
+.wizard-review {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+.wizard-review > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.wizard-review dt {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wizard-review dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+}
+
 /* ================================================================
    ASSIGNMENT PILL (in table cell)
    ================================================================ */

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { clerk } from '../lib/clerk.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
 import { auditFromRequest } from '../services/audit.js';
@@ -10,6 +11,12 @@ const createSiteSchema = z.object({
   code: z.string().min(2).max(12),
   city: z.string().max(100).optional().nullable(),
   state: z.string().length(2).toUpperCase().optional().nullable(),
+});
+
+const inviteManagerSchema = z.object({
+  email: z.string().email(),
+  firstName: z.string().min(1).max(60),
+  lastName: z.string().min(1).max(60),
 });
 
 export const siteRoutes = Router();
@@ -71,6 +78,77 @@ siteRoutes.post(
       });
 
       return res.status(201).json(site);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Invite a site manager (Survey Superintendent). Sends a Clerk invitation whose
+// public_metadata carries the org + role + site, so on sign-up the user is
+// auto-provisioned as a site_supervisor scoped to this site (see authenticate.ts).
+siteRoutes.post(
+  '/sites/:siteId/invite',
+  authenticate,
+  authorize('super_admin', 'regional_director'),
+  async (req, res, next) => {
+    try {
+      const parsed = inviteManagerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Invalid request body', issues: parsed.error.issues });
+      }
+
+      const orgId = req.user!.organizationId;
+      const { siteId } = req.params;
+
+      const site = await prisma.site.findFirst({ where: { id: siteId, organizationId: orgId } });
+      if (!site) return res.status(404).json({ message: 'Site not found' });
+
+      const org = await prisma.organization.findUnique({ where: { id: orgId } });
+      if (!org) return res.status(404).json({ message: 'Organization not found' });
+
+      const { email, firstName, lastName } = parsed.data;
+
+      // Let this email past the sign-up lockdown (allowlist may be enabled).
+      // Idempotent in spirit — ignore "already exists".
+      try {
+        await clerk.allowlistIdentifiers.createAllowlistIdentifier({ identifier: email, notify: false });
+      } catch {
+        /* already allowlisted — fine */
+      }
+
+      let invitation;
+      try {
+        invitation = await clerk.invitations.createInvitation({
+          emailAddress: email,
+          ignoreExisting: true,
+          publicMetadata: {
+            saf_org_slug: org.slug,
+            saf_role: 'site_supervisor',
+            saf_site_id: site.id,
+            saf_first_name: firstName,
+            saf_last_name: lastName,
+          },
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        return res.status(502).json({ message: `Clerk invitation failed: ${message}` });
+      }
+
+      await auditFromRequest(req, {
+        action: 'user.invited',
+        entityType: 'user',
+        entityId: invitation.id,
+        siteId: site.id,
+        newValue: email,
+      });
+
+      return res.status(201).json({
+        id: invitation.id,
+        email,
+        status: invitation.status,
+        siteId: site.id,
+      });
     } catch (err) {
       next(err);
     }

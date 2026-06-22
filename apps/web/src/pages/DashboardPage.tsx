@@ -480,10 +480,10 @@ export const DashboardPage = ({ user, onTab }: Props) => {
 
       {createSiteOpen && (
         <CreateSiteModal
-          onCreated={(site) => {
+          onCreated={(site, inviteNote) => {
             setSites((current) => [...current, site].sort((a, b) => a.name.localeCompare(b.name)));
             setCreateSiteOpen(false);
-            setActionMessage(`Site ${site.code} — ${site.name} created.`);
+            setActionMessage(`Site ${site.code} — ${site.name} created.${inviteNote ? ` ${inviteNote}` : ''}`);
           }}
           onClose={() => setCreateSiteOpen(false)}
         />

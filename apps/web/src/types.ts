@@ -30,6 +30,19 @@ export type CreateSitePayload = {
   state: string | null;
 };
 
+export type InviteManagerPayload = {
+  email: string;
+  firstName: string;
+  lastName: string;
+};
+
+export type Invitation = {
+  id: string;
+  email: string;
+  status: string;
+  siteId: string;
+};
+
 export type AssetOwnership = 'owned' | 'rental' | 'rpo' | 'unknown';
 
 export type Asset = {

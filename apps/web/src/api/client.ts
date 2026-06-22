@@ -7,6 +7,8 @@ import {
   CalibrationRecord,
   CreateSitePayload,
   DispositionPayload,
+  Invitation,
+  InviteManagerPayload,
   Site,
   User,
 } from '../types';
@@ -63,6 +65,13 @@ class ApiClient {
 
   createSite(payload: CreateSitePayload): Promise<Site> {
     return this.request('/sites', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  inviteManager(siteId: string, payload: InviteManagerPayload): Promise<Invitation> {
+    return this.request(`/sites/${siteId}/invite`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   getAssets(): Promise<Asset[]> {

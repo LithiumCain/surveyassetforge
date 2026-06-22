@@ -18,11 +18,13 @@ const US_STATES: [string, string][] = [
   ['WI', 'Wisconsin'], ['WY', 'Wyoming'],
 ];
 
-const STEPS = ['Identity', 'Location', 'Review'] as const;
+const STEPS = ['Identity', 'Location', 'Manager', 'Review'] as const;
 const LAST_STEP = STEPS.length - 1;
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 type Props = {
-  onCreated: (site: Site) => void;
+  // inviteNote is an optional human message about the manager invitation outcome.
+  onCreated: (site: Site, inviteNote?: string) => void;
   onClose: () => void;
 };
 
@@ -34,21 +36,32 @@ export const CreateSiteModal = ({ onCreated, onClose }: Props) => {
     city: null,
     state: null,
   });
+  const [manager, setManager] = useState({ firstName: '', lastName: '', email: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const set = (key: keyof CreateSitePayload, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value || null }));
   };
+  const setMgr = (key: keyof typeof manager, value: string) => {
+    setManager((prev) => ({ ...prev, [key]: value }));
+  };
 
-  // Validate only the fields the current step owns; mirrors the server's rules
-  // (code 2–12 chars, name ≥2) so the user is corrected before advancing.
+  const willInvite = manager.email.trim().length > 0;
+
+  // Validate only the fields the current step owns; mirrors the server's rules.
   const validateStep = (s: number): string | null => {
     if (s === 0) {
-      const code = (form.code ?? '').trim();
-      const name = (form.name ?? '').trim();
+      const code = form.code.trim();
+      const name = form.name.trim();
       if (code.length < 2 || code.length > 12) return 'Site code must be 2–12 characters.';
       if (name.length < 2) return 'Site name must be at least 2 characters.';
+    }
+    if (s === 2 && willInvite) {
+      if (!EMAIL_RE.test(manager.email.trim())) return 'Enter a valid email address.';
+      if (manager.firstName.trim().length < 1 || manager.lastName.trim().length < 1) {
+        return "Add the manager's first and last name to send an invite.";
+      }
     }
     return null;
   };
@@ -61,21 +74,39 @@ export const CreateSiteModal = ({ onCreated, onClose }: Props) => {
   const create = async () => {
     setSaving(true);
     setError(null);
+    let site: Site;
     try {
-      const site = await apiClient.createSite({
+      site = await apiClient.createSite({
         ...form,
         code: form.code.trim(),
         name: form.name.trim(),
       });
-      onCreated(site);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create site');
       setSaving(false);
+      return;
+    }
+
+    // Site exists now. The invite is best-effort: if it fails, don't lose the
+    // site — report the invite problem but still finish the create.
+    if (!willInvite) {
+      onCreated(site);
+      return;
+    }
+    try {
+      await apiClient.inviteManager(site.id, {
+        email: manager.email.trim(),
+        firstName: manager.firstName.trim(),
+        lastName: manager.lastName.trim(),
+      });
+      onCreated(site, `Invited ${manager.email.trim()} as site manager.`);
+    } catch (err) {
+      const why = err instanceof Error ? err.message : 'invite failed';
+      onCreated(site, `Site created, but the invite didn't send (${why}).`);
     }
   };
 
-  // One submit handler so the Enter key advances on early steps and creates on
-  // the last — the form's primary button always does "the obvious next thing".
+  // One submit handler so Enter advances on early steps and creates on the last.
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (step < LAST_STEP) {
@@ -92,6 +123,7 @@ export const CreateSiteModal = ({ onCreated, onClose }: Props) => {
   };
 
   const stateLabel = US_STATES.find(([abbr]) => abbr === form.state)?.[1] ?? null;
+  const managerName = `${manager.firstName.trim()} ${manager.lastName.trim()}`.trim();
 
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -169,6 +201,42 @@ export const CreateSiteModal = ({ onCreated, onClose }: Props) => {
 
           {step === 2 && (
             <>
+              <label className="location-select">
+                <span>Manager First Name</span>
+                <input
+                  autoFocus
+                  placeholder="e.g. Mike"
+                  value={manager.firstName}
+                  onChange={(e) => setMgr('firstName', e.target.value)}
+                />
+              </label>
+              <label className="location-select">
+                <span>Manager Last Name</span>
+                <input
+                  placeholder="e.g. Loth"
+                  value={manager.lastName}
+                  onChange={(e) => setMgr('lastName', e.target.value)}
+                />
+              </label>
+              <label className="location-select" style={{ gridColumn: '1 / -1' }}>
+                <span>Invite Email (optional)</span>
+                <input
+                  type="email"
+                  placeholder="mike.loth@example.com"
+                  value={manager.email}
+                  onChange={(e) => setMgr('email', e.target.value)}
+                />
+              </label>
+              <p className="subtle" style={{ gridColumn: '1 / -1' }}>
+                {willInvite
+                  ? 'We’ll email an invitation. When they accept, they get a login scoped to this site as its supervisor.'
+                  : 'Add an email to invite a site supervisor now — or skip and assign one later.'}
+              </p>
+            </>
+          )}
+
+          {step === 3 && (
+            <>
               <dl className="wizard-review" style={{ gridColumn: '1 / -1' }}>
                 <div>
                   <dt>Site Code</dt>
@@ -186,9 +254,19 @@ export const CreateSiteModal = ({ onCreated, onClose }: Props) => {
                   <dt>State</dt>
                   <dd>{form.state ? `${form.state}${stateLabel ? ` — ${stateLabel}` : ''}` : '—'}</dd>
                 </div>
+                <div>
+                  <dt>Manager</dt>
+                  <dd>
+                    {willInvite
+                      ? `${managerName || 'Invitee'} — invite ${manager.email.trim()}`
+                      : '—'}
+                  </dd>
+                </div>
               </dl>
               <p className="subtle" style={{ gridColumn: '1 / -1' }}>
-                The site will be available immediately for asset assignment.
+                {willInvite
+                  ? 'The site is created and the manager is emailed an invitation to join.'
+                  : 'The site will be available immediately for asset assignment.'}
               </p>
             </>
           )}
@@ -204,7 +282,13 @@ export const CreateSiteModal = ({ onCreated, onClose }: Props) => {
               {step === 0 ? 'Cancel' : 'Back'}
             </button>
             <button type="submit" disabled={saving}>
-              {step < LAST_STEP ? 'Next' : saving ? 'Creating…' : 'Create Site'}
+              {step < LAST_STEP
+                ? 'Next'
+                : saving
+                  ? 'Creating…'
+                  : willInvite
+                    ? 'Create & Invite'
+                    : 'Create Site'}
             </button>
           </div>
         </form>

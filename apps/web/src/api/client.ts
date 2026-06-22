@@ -127,6 +127,13 @@ class ApiClient {
       body: JSON.stringify(payload),
     });
   }
+
+  uploadCalibrationPhoto(dataUrl: string): Promise<{ url: string }> {
+    return this.request('/uploads/calibration-photo', {
+      method: 'POST',
+      body: JSON.stringify({ dataUrl }),
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

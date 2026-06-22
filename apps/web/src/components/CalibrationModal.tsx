@@ -1,5 +1,6 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
+import { compressImage } from '../lib/image';
 import { useToast } from './Toast';
 import { Asset, CalibrationRecord } from '../types';
 
@@ -20,7 +21,19 @@ export const CalibrationModal = ({ asset, onLogged, onClose }: Props) => {
   const [loading, setLoading] = useState(true);
   const [calibratedDate, setCalibratedDate] = useState(today());
   const [notes, setNotes] = useState('');
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const handlePhoto = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    try {
+      setPhotoDataUrl(await compressImage(file));
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : 'Could not read that image', 'error');
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -40,9 +53,16 @@ export const CalibrationModal = ({ asset, onLogged, onClose }: Props) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await apiClient.logCalibration(asset.id, { calibratedDate, notes: notes || null });
+      // Upload the photo first (if any) so we can store its URL on the record.
+      let photoUrl: string | null = null;
+      if (photoDataUrl) {
+        const { url } = await apiClient.uploadCalibrationPhoto(photoDataUrl);
+        photoUrl = url;
+      }
+      await apiClient.logCalibration(asset.id, { calibratedDate, notes: notes || null, photoUrl });
       toast.push('Calibration logged', 'success');
       setNotes('');
+      setPhotoDataUrl(null);
       onLogged(); // refresh the asset list so the new status shows
       load(); // refresh this history
     } catch (err) {
@@ -84,10 +104,31 @@ export const CalibrationModal = ({ asset, onLogged, onClose }: Props) => {
               onChange={(e) => setNotes(e.target.value)}
             />
           </label>
+          <div className="cal-photo" style={{ gridColumn: '1 / -1' }}>
+            {photoDataUrl ? (
+              <div className="cal-photo-preview">
+                <img src={photoDataUrl} alt="Calibration photo preview" />
+                <button type="button" className="secondary-button" onClick={() => setPhotoDataUrl(null)}>
+                  Remove photo
+                </button>
+              </div>
+            ) : (
+              <label className="cal-photo-add secondary-button">
+                Add photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  hidden
+                  onChange={(e) => void handlePhoto(e)}
+                />
+              </label>
+            )}
+          </div>
           <div className="actions">
             <button type="button" className="secondary-button" onClick={onClose}>Close</button>
             <button type="submit" disabled={saving}>
-              {saving ? 'Logging…' : 'Log Calibration'}
+              {saving ? (photoDataUrl ? 'Uploading…' : 'Logging…') : 'Log Calibration'}
             </button>
           </div>
         </form>

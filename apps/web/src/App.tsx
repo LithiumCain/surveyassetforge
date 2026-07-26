@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { SignedIn, SignedOut, SignIn, useAuth } from '@clerk/clerk-react';
+import { useCallback, useEffect, useState } from 'react';
+import { SignedIn, SignedOut, SignIn, useAuth, useUser } from '@clerk/clerk-react';
 import { apiClient } from './api/client';
 import { DashboardPage } from './pages/DashboardPage';
 import { ReportsPage } from './pages/ReportsPage';
@@ -34,18 +34,25 @@ export const App = () => (
 // (resolved from the Clerk identity by the API) and hands off to the dashboard.
 const AuthedApp = () => {
   const { getToken, signOut } = useAuth();
+  const { user: clerkUser } = useUser();
   const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('dashboard');
 
-  useEffect(() => {
-    apiClient.setTokenGetter(() => getToken());
+  const loadMe = useCallback(() => {
+    setBooting(true);
+    setError(null);
     apiClient
       .getMe()
       .then(setUser)
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load your account'))
       .finally(() => setBooting(false));
+  }, []);
+
+  useEffect(() => {
+    apiClient.setTokenGetter(() => getToken());
+    loadMe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -58,11 +65,34 @@ const AuthedApp = () => {
   }
 
   if (error || !user) {
+    const email = clerkUser?.primaryEmailAddress?.emailAddress;
     return (
-      <main className="layout center">
-        <div className="card" style={{ textAlign: 'center', maxWidth: 420 }}>
-          <p>{error ?? 'Your account is not set up yet.'}</p>
-          <button onClick={() => void signOut()}>Sign out</button>
+      <main className="login-page center">
+        <div className="login card" style={{ maxWidth: 460 }}>
+          <div className="login-brand">
+            <div className="topbar-logo">SAF</div>
+            <div>
+              <h2>Survey Asset Forge</h2>
+              <p>Field Operations Asset Management</p>
+            </div>
+          </div>
+          <div className="login-divider" />
+          <div style={{ textAlign: 'center' }}>
+            <h3 style={{ marginTop: 0 }}>We couldn&apos;t load your account</h3>
+            <p>{error ?? 'Your account is not set up yet.'}</p>
+            {email ? (
+              <p style={{ color: 'var(--muted, #64748b)', fontSize: '0.9rem' }}>
+                You&apos;re signed in as <strong>{email}</strong>. Ask an administrator to add
+                this email to your company&apos;s organization, then try again.
+              </p>
+            ) : null}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12 }}>
+              <button onClick={loadMe}>Try again</button>
+              <button className="secondary-button" onClick={() => void signOut()}>
+                Sign out
+              </button>
+            </div>
+          </div>
         </div>
       </main>
     );

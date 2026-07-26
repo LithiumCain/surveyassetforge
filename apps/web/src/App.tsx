@@ -3,6 +3,7 @@ import { SignedIn, SignedOut, SignIn, useAuth, useUser } from '@clerk/clerk-reac
 import { apiClient } from './api/client';
 import { DashboardPage } from './pages/DashboardPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { TeamPage } from './pages/TeamPage';
 import type { Tab } from './components/TopBar';
 import { User } from './types';
 
@@ -100,6 +101,8 @@ const AuthedApp = () => {
 
   return tab === 'reports' ? (
     <ReportsPage user={user} onTab={setTab} />
+  ) : tab === 'team' ? (
+    <TeamPage user={user} onTab={setTab} />
   ) : (
     <DashboardPage user={user} onTab={setTab} />
   );

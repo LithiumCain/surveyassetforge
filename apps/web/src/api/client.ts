@@ -10,6 +10,8 @@ import {
   Invitation,
   InviteManagerPayload,
   Site,
+  TeamUser,
+  TeamUserUpdate,
   User,
 } from '../types';
 
@@ -57,6 +59,14 @@ class ApiClient {
 
   getMe(): Promise<User> {
     return this.request('/users/me');
+  }
+
+  getTeam(): Promise<TeamUser[]> {
+    return this.request('/users');
+  }
+
+  updateTeamUser(id: string, payload: TeamUserUpdate): Promise<TeamUser> {
+    return this.request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
   }
 
   getSites(): Promise<Site[]> {

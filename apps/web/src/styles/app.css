@@ -902,6 +902,79 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
 
 
 /* ================================================================
+   TEAM PAGE
+   ================================================================ */
+
+.team-list { display: grid; gap: 8px; }
+
+.team-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fafcff;
+  flex-wrap: wrap;
+}
+
+.team-row.inactive { opacity: 0.6; background: #f4f6f9; }
+
+.team-identity { display: grid; gap: 2px; min-width: 200px; }
+
+.team-name {
+  font-weight: 700;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.team-email { font-size: 12px; color: var(--muted); }
+
+.chip-you {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(0,198,193,.15);
+  color: #0b7a70;
+  border: 1px solid rgba(0,198,193,.35);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.team-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.team-controls .location-select { min-width: 170px; }
+
+.invite-box {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 14px;
+  background: #f8fbff;
+}
+
+.role-legend { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.role-legend li { font-size: 13px; color: #1e293b; }
+
+@media (max-width: 768px) {
+  .team-row { flex-direction: column; align-items: stretch; }
+  .team-controls { align-items: stretch; flex-direction: column; }
+  .team-controls .location-select { min-width: 0; }
+  .team-summary { grid-template-columns: 1fr 1fr; }
+}
+
+
+/* ================================================================
    EMPTY STATE & IMPORT
    ================================================================ */
 

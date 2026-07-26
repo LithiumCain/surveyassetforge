@@ -10,6 +10,7 @@ import { authRoutes } from './routes/authRoutes.js';
 import { importRoutes } from './routes/importRoutes.js';
 import { siteRoutes } from './routes/siteRoutes.js';
 import { uploadRoutes } from './routes/uploadRoutes.js';
+import { userRoutes } from './routes/userRoutes.js';
 
 // Re-export the shared client so existing imports keep working.
 export { prisma } from './lib/prisma.js';
@@ -39,6 +40,7 @@ app.use('/api/v1', assetRoutes);
 app.use('/api/v1', assignmentRoutes);
 app.use('/api/v1', uploadRoutes);
 app.use('/api/v1', importRoutes);
+app.use('/api/v1', userRoutes);
 
 // Unknown route — clean JSON 404 instead of Express's default HTML page.
 app.use((_req, res) => {

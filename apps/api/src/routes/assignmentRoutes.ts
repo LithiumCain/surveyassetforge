@@ -121,6 +121,19 @@ assignmentRoutes.post(
 // ── Custody history for one piece of equipment ───────────────────
 assignmentRoutes.get('/assets/:assetId/assignments', async (req, res, next) => {
   try {
+    // Same site wall as the other per-asset reads: supervisors can only see
+    // history for gear at their own site.
+    const equipment = await prisma.equipment.findFirst({
+      where: { id: req.params.assetId, organizationId: req.user!.organizationId },
+      select: { siteId: true },
+    });
+    if (!equipment) {
+      return res.status(404).json({ message: 'Asset not found' });
+    }
+    if (req.user!.role === 'site_supervisor' && equipment.siteId !== req.user!.siteId) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
     const assignments = await prisma.assetAssignment.findMany({
       where: { organizationId: req.user!.organizationId, equipmentId: req.params.assetId },
       include: {

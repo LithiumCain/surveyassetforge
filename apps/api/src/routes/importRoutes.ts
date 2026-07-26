@@ -64,16 +64,19 @@ importRoutes.post('/import/workbook', authorize('super_admin'), async (req, res,
     const { sites, assets } = parsed.data;
     const organizationId = req.user!.organizationId;
 
-    // Upsert sites by (org, code) so a re-import refreshes names, never duplicates.
-    const siteIdByCode = new Map<string, string>();
-    for (const s of sites) {
-      const site = await prisma.site.upsert({
-        where: { organizationId_code: { organizationId, code: s.code } },
-        update: { name: s.name },
-        create: { organizationId, code: s.code, name: s.name, status: 'active' },
-      });
-      siteIdByCode.set(s.code, site.id);
-    }
+    // Upsert sites by (org, code) so a re-import refreshes names, never
+    // duplicates. Batched in one transaction — one network round trip instead
+    // of N sequential queries (matters inside a serverless time budget).
+    const upsertedSites = await prisma.$transaction(
+      sites.map((s) =>
+        prisma.site.upsert({
+          where: { organizationId_code: { organizationId, code: s.code } },
+          update: { name: s.name },
+          create: { organizationId, code: s.code, name: s.name, status: 'active' },
+        }),
+      ),
+    );
+    const siteIdByCode = new Map<string, string>(upsertedSites.map((s) => [s.code, s.id]));
 
     const rows = [];
     let missingSite = 0;

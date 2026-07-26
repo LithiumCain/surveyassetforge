@@ -137,11 +137,11 @@ export const BulkEditGrid = ({ assets, sites, onSaved, onCancel }: Props) => {
                 <td>
                   <select
                     value={valueOf(a, 'siteId') ?? ''}
-                    onChange={(e) => setField(a.id, 'siteId', e.target.value)}
+                    onChange={(e) => setField(a.id, 'siteId', e.target.value || null)}
                   >
                     {/* Show the current site even if it's outside the filtered list. */}
                     {!sites.some((s) => s.id === a.siteId) && (
-                      <option value={a.siteId}>{a.siteName ?? '— current —'}</option>
+                      <option value={a.siteId ?? ''}>{a.siteName ?? 'Inventory'}</option>
                     )}
                     {sites.map((s) => (
                       <option key={s.id} value={s.id}>

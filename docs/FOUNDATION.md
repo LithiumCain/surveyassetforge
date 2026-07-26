@@ -31,11 +31,14 @@ SQL tables are generated from it via Prisma Migrate).
 - **Identity is owned by Clerk.** Users sign in via Clerk; our `User` table keeps
   a local row keyed by `clerkUserId`, and `Organization` maps to a Clerk
   Organization via `clerkOrgId`. No passwords are stored.
-- **Pending:** the API's `authenticate` middleware is currently a **dev-only
-  shim** (`apps/api/src/middleware/authenticate.ts`). It is disabled unless
-  `DEV_AUTH=1` and resolves the request user from an `x-dev-user` header (a
-  seeded `clerkUserId`). In production it returns 401 until Clerk session
-  verification is dropped in. Search the code for `TODO(clerk)`.
+- **Session verification is live**: `apps/api/src/middleware/authenticate.ts`
+  verifies the Clerk session token on every request and resolves (or
+  provisions) the local user. Provisioning paths, in order: app invitation
+  (`saf_*` metadata), **Clerk organization membership** (the canonical way —
+  `org:admin` → `super_admin`), then the JIT env fallback. Full details and
+  troubleshooting in `docs/CLERK_PROVISIONING.md`.
+- A dev-only test shim remains behind `DEV_AUTH=1` + an `x-dev-user` header
+  (a seeded `clerkUserId`) for local/automated testing.
 
 ## Audit logging
 

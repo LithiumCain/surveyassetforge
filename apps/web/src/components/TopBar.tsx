@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import { UserButton } from '@clerk/clerk-react';
 import { User } from '../types';
 
-export type Tab = 'dashboard' | 'reports';
+export type Tab = 'dashboard' | 'reports' | 'team';
 
 const roleLabel: Record<string, string> = {
   super_admin: 'Super Admin',
@@ -44,6 +44,7 @@ export const TopBar = ({ user, tab, onTab, children }: Props) => {
         <nav className="topbar-nav">
           {tabButton('dashboard', 'Dashboard')}
           {tabButton('reports', 'Reports')}
+          {user.role !== 'site_supervisor' && tabButton('team', 'Team')}
         </nav>
       </div>
       <div className="topbar-right">

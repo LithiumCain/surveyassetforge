@@ -43,6 +43,24 @@ export type Invitation = {
   siteId: string;
 };
 
+export type TeamUser = {
+  id: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  role: UserRole;
+  siteId: string | null;
+  isActive: boolean;
+  createdAt: string;
+  site: { id: string; code: string; name: string } | null;
+};
+
+export type TeamUserUpdate = {
+  role?: UserRole;
+  siteId?: string | null;
+  isActive?: boolean;
+};
+
 export type AssetOwnership = 'owned' | 'rental' | 'rpo' | 'unknown';
 
 export type Asset = {

@@ -54,8 +54,8 @@ export type Asset = {
   itemName: string;
   manufacturer: string | null;
   equipmentType: string;
-  siteId: string;
-  siteName: string;
+  siteId: string | null; // null => in inventory (unassigned)
+  siteName: string | null;
   ownership: AssetOwnership;
   assignedName: string | null;
   employeeNumber: string | null;
@@ -144,7 +144,7 @@ export type AssetPayload = {
   itemName: string;
   manufacturer: string | null;
   equipmentType: string;
-  siteId: string;
+  siteId: string | null; // null => in inventory
   ownership: AssetOwnership;
   assignedName: string | null;
   employeeNumber: string | null;

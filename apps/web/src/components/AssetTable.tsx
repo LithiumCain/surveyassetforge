@@ -1,5 +1,23 @@
 import { Asset, AssetAssignment, User } from '../types';
 
+const DAY_MS = 86_400_000;
+
+// "14d overdue" / "in 6d" chip next to the due date, so urgency reads at a glance.
+const dueChip = (nextDue: string | null) => {
+  if (!nextDue) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(`${nextDue}T00:00:00`);
+  const days = Math.round((due.getTime() - today.getTime()) / DAY_MS);
+  if (days < 0) return <span className="due-chip late">{-days}d overdue</span>;
+  if (days === 0) return <span className="due-chip soon">today</span>;
+  if (days <= 14) return <span className="due-chip soon">in {days}d</span>;
+  return <span className="due-chip">in {days}d</span>;
+};
+
+const money = (n: number | null | undefined) =>
+  `$${Math.round(Number(n ?? 0)).toLocaleString()}`;
+
 type Props = {
   assets: Asset[];
   user: User;
@@ -36,8 +54,6 @@ export const AssetTable = ({
               <th>Ownership</th>
               <th>Assigned To</th>
               <th>Calibration</th>
-              <th>Next Due</th>
-              <th>Subscription End</th>
               <th>Firmware</th>
               <th>Serial #</th>
               <th>Damage</th>
@@ -48,7 +64,7 @@ export const AssetTable = ({
           <tbody>
             {assets.length === 0 && (
               <tr>
-                <td colSpan={14} style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px' }}>
+                <td colSpan={12} style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px' }}>
                   No assets found for this location.
                 </td>
               </tr>
@@ -60,7 +76,7 @@ export const AssetTable = ({
                   <td>{asset.assetNumber}</td>
                   <td>{asset.itemName}</td>
                   <td>{asset.manufacturer ?? '—'}</td>
-                  <td>{asset.siteName}</td>
+                  <td>{asset.siteName ?? <span style={{ color: 'var(--muted)' }}>Inventory</span>}</td>
                   <td style={{ textTransform: 'capitalize' }}>{asset.ownership}</td>
                   <td>
                     {assignment ? (
@@ -75,12 +91,13 @@ export const AssetTable = ({
                     )}
                   </td>
                   <td>
-                    <span className={`badge ${asset.calibrationStatus}`}>
-                      {asset.calibrationStatus.replace('_', ' ')}
-                    </span>
+                    <div className="cal-cell">
+                      <span className={`badge ${asset.calibrationStatus}`}>
+                        {asset.calibrationStatus.replace('_', ' ')}
+                      </span>
+                      {dueChip(asset.nextCalibrationDue)}
+                    </div>
                   </td>
-                  <td>{asset.nextCalibrationDue ?? '—'}</td>
-                  <td>{asset.subscriptionEndDate ?? '—'}</td>
                   <td>
                     {asset.firmwareVersion ?? '—'}
                     {asset.firmwareOutdated && (
@@ -93,7 +110,7 @@ export const AssetTable = ({
                       {asset.damageStatus.replace('_', ' ')}
                     </span>
                   </td>
-                  <td>${Number(asset.currentValue ?? 0).toLocaleString()}</td>
+                  <td className="num">{money(asset.currentValue)}</td>
                   <td>
                     <div className="row-actions">
                       {/* Log calibration */}

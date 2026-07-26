@@ -31,7 +31,7 @@ const ASSET_COLUMNS: [string, (a: Asset) => string | number | null][] = [
   ['Asset #', (a) => a.assetNumber],
   ['Item', (a) => a.itemName],
   ['Manufacturer', (a) => a.manufacturer],
-  ['Site', (a) => a.siteName],
+  ['Site', (a) => a.siteName ?? 'Inventory'],
   ['Type', (a) => a.equipmentType],
   ['Ownership', (a) => a.ownership],
   ['Calibration', (a) => a.calibrationStatus],

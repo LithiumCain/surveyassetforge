@@ -10,6 +10,7 @@ import { CalibrationModal } from '../components/CalibrationModal';
 import { CreateSiteModal } from '../components/CreateSiteModal';
 import { CustodyHistory } from '../components/CustodyHistory';
 import { DispositionModal } from '../components/DispositionModal';
+import { ImportModal } from '../components/ImportModal';
 import { RegionalAlerts } from '../components/RegionalAlerts';
 import { ScannerModal } from '../components/ScannerModal';
 import { useToast } from '../components/Toast';
@@ -44,13 +45,14 @@ export const DashboardPage = ({ user, onTab }: Props) => {
   const [historyTarget, setHistoryTarget] = useState<Asset | null>(null);
   const [calibrationTarget, setCalibrationTarget] = useState<Asset | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [bulkEdit, setBulkEdit] = useState(false);
   const formAnchorRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
   const siteCounts = useMemo(() => {
     return assets.reduce<Record<string, number>>((counts, asset) => {
-      counts[asset.siteId] = (counts[asset.siteId] ?? 0) + 1;
+      if (asset.siteId) counts[asset.siteId] = (counts[asset.siteId] ?? 0) + 1;
       return counts;
     }, {});
   }, [assets]);
@@ -130,7 +132,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
         case 'currentValueAsc':
           return Number(left.currentValue ?? 0) - Number(right.currentValue ?? 0);
         case 'siteNameAsc':
-          return left.siteName.localeCompare(right.siteName) || left.assetNumber.localeCompare(right.assetNumber);
+          return (left.siteName ?? '').localeCompare(right.siteName ?? '') || left.assetNumber.localeCompare(right.assetNumber);
         case 'assetNumberAsc':
         default:
           return left.assetNumber.localeCompare(right.assetNumber);
@@ -264,9 +266,9 @@ export const DashboardPage = ({ user, onTab }: Props) => {
         >
           Export CSV
         </button>
-        <button onClick={() => toast.push('Import is coming soon — we’ll wire it to your spreadsheet', 'info')}>
-          Import
-        </button>
+        {user.role === 'super_admin' && (
+          <button onClick={() => setImportOpen(true)}>Import</button>
+        )}
       </TopBar>
 
       {(user.role === 'super_admin' || user.role === 'regional_director') && (
@@ -277,6 +279,69 @@ export const DashboardPage = ({ user, onTab }: Props) => {
         />
       )}
 
+      <section className="summary-grid">
+        <article className="card kpi" onClick={() => setStatusFilter('all')}>
+          <h2>{summary.total}</h2><p>Total Assets</p>
+        </article>
+        <article
+          className={`card kpi clickable${statusFilter === 'overdue' ? ' active' : ''}`}
+          onClick={() => setStatusFilter(statusFilter === 'overdue' ? 'all' : 'overdue')}
+        >
+          <h2>{summary.overdue}</h2><p>Overdue Calibration</p>
+        </article>
+        <article
+          className={`card kpi clickable${statusFilter === 'due_soon' ? ' active' : ''}`}
+          onClick={() => setStatusFilter(statusFilter === 'due_soon' ? 'all' : 'due_soon')}
+        >
+          <h2>{summary.dueSoon}</h2><p>Due Soon</p>
+        </article>
+        <article
+          className={`card kpi clickable${statusFilter === 'under_repair' ? ' active' : ''}`}
+          onClick={() => setStatusFilter(statusFilter === 'under_repair' ? 'all' : 'under_repair')}
+        >
+          <h2>{summary.underRepair}</h2><p>Under Repair</p>
+        </article>
+        <article className="card kpi"><h2>${Math.round(summary.totalCost).toLocaleString()}</h2><p>Total Cost</p></article>
+        <article className="card kpi"><h2>${Math.round(summary.currentValue).toLocaleString()}</h2><p>Current Value</p></article>
+      </section>
+
+      <section className="card scan-box">
+        <h3>Scan Lookup</h3>
+        <p>Scan a barcode or QR code with your camera, or type the asset number.</p>
+        <div className="inline-controls">
+          <input value={scanInput} onChange={(e) => setScanInput(e.target.value)} placeholder="Asset number" />
+          <button type="button" onClick={() => void handleScanLookup()}>Lookup</button>
+          <button type="button" className="secondary-button" onClick={() => setScannerOpen(true)}>Scan</button>
+        </div>
+        {scanResult && (
+          <p className="scan-result">
+            Found: <strong>{scanResult.assetNumber}</strong> - {scanResult.itemName} ({scanResult.siteName})
+          </p>
+        )}
+      </section>
+
+      {!loading && assets.length === 0 && (
+        <section className="card empty-state">
+          <h3>Let&apos;s get your fleet in here</h3>
+          <p className="subtle">
+            No assets yet. The fastest way to start is importing your existing Survey Asset
+            Tracker workbook — every site tab becomes a site, every row becomes a tracked asset.
+          </p>
+          <div className="actions" style={{ justifyContent: 'center', marginTop: 14 }}>
+            {user.role === 'super_admin' && (
+              <button onClick={() => setImportOpen(true)}>Import your workbook</button>
+            )}
+            <button className="secondary-button" onClick={() => setCreateSiteOpen(true)}>Add a site</button>
+            {(user.role === 'super_admin' || user.role === 'site_supervisor') && (
+              <button className="secondary-button" onClick={() => { setEditing(undefined); setFormOpen(true); }}>
+                Add one asset
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
+      {(loading || assets.length > 0) && (
       <section className="card location-nav">
         <div className="section-heading">
           <div>
@@ -342,31 +407,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
           <span>sites with workbook data</span>
         </div>
       </section>
-
-      <section className="summary-grid">
-        <article className="card"><h2>{summary.total}</h2><p>Total Assets</p></article>
-        <article className="card"><h2>{summary.overdue}</h2><p>Overdue Calibration</p></article>
-        <article className="card"><h2>{summary.dueSoon}</h2><p>Due Soon</p></article>
-        <article className="card"><h2>{summary.underRepair}</h2><p>Under Repair</p></article>
-        <article className="card"><h2>${summary.totalCost.toLocaleString()}</h2><p>Total Cost</p></article>
-        <article className="card"><h2>${summary.currentValue.toLocaleString()}</h2><p>Current Value</p></article>
-      </section>
-
-      <section className="card scan-box">
-        <h3>Scan Lookup</h3>
-        <p>Scan a barcode or QR code with your camera, or type the asset number.</p>
-        <div className="inline-controls">
-          <input value={scanInput} onChange={(e) => setScanInput(e.target.value)} placeholder="Asset number" />
-          <button type="button" onClick={() => void handleScanLookup()}>Lookup</button>
-          <button type="button" className="secondary-button" onClick={() => setScannerOpen(true)}>Scan</button>
-        </div>
-        {scanResult && (
-          <p className="scan-result">
-            Found: <strong>{scanResult.assetNumber}</strong> - {scanResult.itemName} ({scanResult.siteName})
-          </p>
-        )}
-      </section>
-
+      )}
 
       {actionMessage && (
         <section className="card status-strip">
@@ -374,6 +415,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
         </section>
       )}
 
+      {(loading || assets.length > 0) && (
       <section className="card asset-toolbar">
         <div className="section-heading">
           <div>
@@ -411,6 +453,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
         </div>
         {error && <p className="error" style={{ marginTop: 8 }}>{error}</p>}
       </section>
+      )}
 
       <div ref={formAnchorRef} />
       {formOpen && (
@@ -428,7 +471,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
 
       {loading ? (
         <section className="card"><p>Loading assets...</p></section>
-      ) : bulkEdit ? (
+      ) : assets.length === 0 ? null : bulkEdit ? (
         <BulkEditGrid
           assets={filteredAssets}
           sites={sites}
@@ -484,6 +527,16 @@ export const DashboardPage = ({ user, onTab }: Props) => {
           asset={dispositionTarget}
           onDisposed={() => void handleDisposed()}
           onClose={() => setDispositionTarget(null)}
+        />
+      )}
+
+      {importOpen && (
+        <ImportModal
+          onImported={() => {
+            setImportOpen(false);
+            void loadData();
+          }}
+          onClose={() => setImportOpen(false)}
         />
       )}
 

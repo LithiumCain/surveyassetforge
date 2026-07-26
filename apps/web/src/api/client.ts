@@ -128,6 +128,13 @@ class ApiClient {
     });
   }
 
+  importWorkbook(payload: {
+    sites: { code: string; name: string }[];
+    assets: unknown[];
+  }): Promise<{ sites: number; created: number; skipped: number }> {
+    return this.request('/import/workbook', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
   uploadCalibrationPhoto(dataUrl: string): Promise<{ url: string }> {
     return this.request('/uploads/calibration-photo', {
       method: 'POST',

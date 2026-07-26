@@ -23,17 +23,8 @@ export const TopBar = ({ user, tab, onTab, children }: Props) => {
   const tabButton = (key: Tab, label: string) => (
     <button
       type="button"
+      className={`topbar-tab${tab === key ? ' active' : ''}`}
       onClick={() => onTab(key)}
-      style={{
-        background: tab === key ? 'rgba(255,255,255,0.18)' : 'transparent',
-        color: '#ffffff',
-        border: 'none',
-        padding: '7px 16px',
-        borderRadius: 9,
-        cursor: 'pointer',
-        fontWeight: tab === key ? 700 : 500,
-        fontSize: 13,
-      }}
     >
       {label}
     </button>
@@ -50,7 +41,7 @@ export const TopBar = ({ user, tab, onTab, children }: Props) => {
             {name} · {roleLabel[user.role] ?? user.role}
           </p>
         </div>
-        <nav style={{ display: 'flex', gap: 4, marginLeft: 12 }}>
+        <nav className="topbar-nav">
           {tabButton('dashboard', 'Dashboard')}
           {tabButton('reports', 'Reports')}
         </nav>

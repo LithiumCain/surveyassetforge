@@ -134,6 +134,20 @@ body { margin: 0; }
   border-color: rgba(255,255,255,.35);
 }
 
+.topbar-nav { display: flex; gap: 4px; margin-left: 12px; }
+
+.topbar .topbar-tab {
+  background: transparent;
+  border: none;
+  padding: 7px 16px;
+  font-weight: 500;
+  font-size: 13px;
+}
+.topbar .topbar-tab.active {
+  background: rgba(255,255,255,0.18);
+  font-weight: 700;
+}
+
 
 /* ================================================================
    CARD
@@ -811,6 +825,83 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
 
 
 /* ================================================================
+   ASSET CARDS (phone view of the asset table)
+   ================================================================ */
+
+.asset-cards { display: none; }
+
+.asset-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  background: #fbfdff;
+}
+
+.asset-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.asset-card-title { display: grid; gap: 2px; min-width: 0; }
+
+.asset-card-number {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+.asset-card-name { font-size: 14px; color: #1e293b; }
+
+.asset-card-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  margin: 0;
+}
+
+.asset-card-meta div { display: grid; gap: 1px; min-width: 0; }
+
+.asset-card-meta dt {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
+.asset-card-meta dd {
+  margin: 0;
+  font-size: 13px;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-card-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid #edf3f8;
+  padding-top: 10px;
+}
+
+.asset-card-flags {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+
+/* ================================================================
    EMPTY STATE & IMPORT
    ================================================================ */
 
@@ -919,10 +1010,16 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
   padding: 28px 24px;
   width: 100%;
   max-width: 480px;
+  max-height: 90dvh;
+  overflow-y: auto;
   box-shadow: var(--shadow-lg);
   display: grid;
   gap: 16px;
   animation: modal-in 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal { animation: none; }
 }
 
 @keyframes modal-in {
@@ -1139,12 +1236,27 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
     border-radius: 0 0 16px 16px;
   }
 
+  .topbar-brand { flex-wrap: wrap; row-gap: 8px; }
+  .topbar-nav { margin-left: 0; width: 100%; }
+
   .topbar-right {
     width: 100%;
     justify-content: space-between;
+    flex-wrap: wrap;
+    row-gap: 8px;
   }
 
+  /* 16px inputs stop iOS Safari from zooming the page on focus. */
+  input, select { font-size: 16px; }
+
+  /* Bigger touch targets for gloved/thumb use. */
+  button { padding: 11px 18px; }
+  .topbar button { padding: 9px 14px; }
+  .icon-action { width: 40px; height: 40px; border-radius: 10px; }
+  .icon-action svg { width: 17px; height: 17px; }
+
   .inline-controls { flex-direction: column; }
+  .inline-controls button { width: 100%; }
   .section-heading { flex-direction: column; }
   .location-toolbar { grid-template-columns: 1fr; }
   .location-meta { flex-wrap: wrap; }
@@ -1157,7 +1269,14 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
     align-items: stretch;
   }
 
-  .alert-grid { grid-template-columns: 1fr; }
+  .alert-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .alert-card { padding: 14px 8px 12px; }
+  .alert-card h2 { font-size: 30px; }
+  .alert-card span { display: none; }
+
+  .summary-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .summary-grid article { padding: 14px 12px 12px; }
+  .summary-grid article h2 { font-size: 24px; }
 
   .asset-toolbar-actions {
     flex-direction: column;
@@ -1171,4 +1290,11 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
   }
 
   .modal { padding: 20px 16px; }
+  .modal .actions { flex-wrap: wrap; }
+  .modal .actions button { flex: 1; }
+
+  /* Asset list: swap the wide table for cards. */
+  .asset-list .asset-table-wrap { display: none; }
+  .asset-list .asset-cards { display: grid; gap: 10px; }
+  .asset-list.card { padding: 12px; }
 }

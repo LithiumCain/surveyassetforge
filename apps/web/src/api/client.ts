@@ -128,11 +128,31 @@ class ApiClient {
     });
   }
 
-  importWorkbook(payload: {
+  // Large workbooks are sent in chunks so no single request can hit the API's
+  // row cap, the body-size limit, or a serverless time budget. The endpoint is
+  // idempotent (duplicates are skipped), so a retried chunk is harmless.
+  async importWorkbook(payload: {
     sites: { code: string; name: string }[];
     assets: unknown[];
   }): Promise<{ sites: number; created: number; skipped: number }> {
-    return this.request('/import/workbook', { method: 'POST', body: JSON.stringify(payload) });
+    const CHUNK = 800;
+    let created = 0;
+    let skipped = 0;
+    for (let i = 0; i < payload.assets.length; i += CHUNK) {
+      const result = await this.request<{ sites: number; created: number; skipped: number }>(
+        '/import/workbook',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            sites: payload.sites,
+            assets: payload.assets.slice(i, i + CHUNK),
+          }),
+        },
+      );
+      created += result.created;
+      skipped += result.skipped;
+    }
+    return { sites: payload.sites.length, created, skipped };
   }
 
   uploadCalibrationPhoto(dataUrl: string): Promise<{ url: string }> {

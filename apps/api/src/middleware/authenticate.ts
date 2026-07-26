@@ -285,7 +285,17 @@ const resolveLocalUser = async (clerkUserId: string): Promise<LocalUser | null> 
     return denied(clerkUserId, profile.email, 'email not on CLERK_JIT_ALLOWED_EMAILS');
   }
 
-  const role = (process.env.CLERK_JIT_ROLE as UserRole) ?? 'super_admin';
+  // Validate the configured JIT role — a typo'd env value must not produce a
+  // broken row (or a silently wrong privilege level).
+  const configured = process.env.CLERK_JIT_ROLE;
+  let role: UserRole = 'super_admin'; // documented dev default
+  if (configured) {
+    if (VALID_ROLES.has(configured as UserRole)) {
+      role = configured as UserRole;
+    } else {
+      console.warn(`[auth] invalid CLERK_JIT_ROLE "${configured}" — using super_admin`);
+    }
+  }
   return reclaimOrCreateUser(clerkUserId, org.id, role, null, profile);
 };
 

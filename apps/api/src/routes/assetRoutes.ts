@@ -117,7 +117,9 @@ const listScope = (req: Request): Prisma.EquipmentWhereInput => {
     organizationId: req.user!.organizationId,
     status: 'active',
   };
-  if (req.user!.role === 'site_supervisor' && req.user!.siteId) {
+  if (req.user!.role === 'site_supervisor') {
+    // ALWAYS pin supervisors to their site. A supervisor with no site assigned
+    // yet (siteId null) sees inventory only — never the whole fleet.
     where.siteId = req.user!.siteId;
   }
   return where;
@@ -451,7 +453,7 @@ assetRoutes.get('/assets/:id/calibrations', async (req, res, next) => {
   }
 });
 
-assetRoutes.post('/scan/asset', authorize('super_admin', 'site_supervisor'), async (req, res, next) => {
+assetRoutes.post('/scan/asset', authorize('super_admin', 'regional_director', 'site_supervisor'), async (req, res, next) => {
   try {
     const parsed = scanSchema.safeParse(req.body);
     if (!parsed.success) {

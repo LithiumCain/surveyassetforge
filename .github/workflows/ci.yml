@@ -27,10 +27,11 @@ jobs:
 
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/hartsystem
-      JWT_SECRET: ci-secret
-      JWT_EXPIRES_IN: 8h
       PORT: 4000
       VITE_API_BASE_URL: http://localhost:4000/api/v1
+      # The web build hard-fails without a publishable key (see apps/web/vite.config.ts).
+      # A syntactically valid dummy is enough — nothing here talks to Clerk.
+      VITE_CLERK_PUBLISHABLE_KEY: pk_test_ci-placeholder
 
     steps:
       - name: Checkout
@@ -42,17 +43,25 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-
       - name: Install dependencies
         run: npm ci
 
       - name: Apply database migrations
         run: npm run db:migrate
 
-      - name: Lint
+      - name: Typecheck
         run: npm run lint
 
       - name: Build
         run: npm run build
+
+      - name: Verify the web bundle contains the app
+        # A missing build-time env var can reduce main.tsx to an unconditional throw,
+        # which the bundler then drops along with the entire app — a "successful"
+        # build that ships a blank page. Assert real app code made it into the output.
+        run: |
+          if ! grep -rq "Total Assets" apps/web/dist/assets/*.js; then
+            echo "::error::Web bundle is missing application code — check build-time env vars."
+            exit 1
+          fi
+          echo "Web bundle contains application code."

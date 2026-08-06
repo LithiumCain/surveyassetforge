@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useModalDismiss } from '../lib/useModalDismiss';
 import { apiClient } from '../api/client';
 import { Asset, AssetAssignment } from '../types';
 
@@ -18,6 +19,7 @@ const duration = (outIso: string, inIso: string | null): string => {
 };
 
 export const CustodyHistory = ({ asset, onClose }: Props) => {
+  useModalDismiss(onClose);
   const [history, setHistory] = useState<AssetAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

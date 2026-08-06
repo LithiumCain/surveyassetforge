@@ -9,8 +9,6 @@ type Props = {
   onCancel: () => void;
 };
 
-const today = new Date().toISOString().slice(0, 10);
-
 const toNullable = (value: string): string | null => {
   const trimmed = value.trim();
   return trimmed.length ? trimmed : null;
@@ -29,7 +27,10 @@ export const AssetForm = ({ sites, user, initial, onSubmit, onCancel }: Props) =
     itemName: initial?.itemName ?? '',
     manufacturer: initial?.manufacturer ?? '',
     equipmentType: initial?.equipmentType ?? 'GNSS',
-    siteId: initial?.siteId ?? defaultSiteId,
+    // siteId: null means "in inventory" — a real value, not a missing one. Using
+    // `initial?.siteId ?? defaultSiteId` would silently relocate every inventory
+    // asset to the first site in the list on save.
+    siteId: initial ? initial.siteId ?? '' : defaultSiteId,
     ownership: initial?.ownership ?? 'unknown',
     assignedName: initial?.assignedName ?? '',
     employeeNumber: initial?.employeeNumber ?? '',
@@ -69,7 +70,8 @@ export const AssetForm = ({ sites, user, initial, onSubmit, onCancel }: Props) =
         itemName: form.itemName,
         manufacturer: toNullable(form.manufacturer),
         equipmentType: form.equipmentType,
-        siteId: form.siteId,
+        // '' is the Inventory option; the API takes null, and rejects ''.
+        siteId: form.siteId || null,
         ownership: form.ownership as AssetPayload['ownership'],
         assignedName: toNullable(form.assignedName),
         employeeNumber: toNullable(form.employeeNumber),
@@ -104,7 +106,7 @@ export const AssetForm = ({ sites, user, initial, onSubmit, onCancel }: Props) =
       <label>Item Name<input required value={form.itemName} onChange={(e) => setForm({ ...form, itemName: e.target.value })} /></label>
       <label>Manufacturer<input value={form.manufacturer} onChange={(e) => setForm({ ...form, manufacturer: e.target.value })} /></label>
       <label>Equipment Type<input required value={form.equipmentType} onChange={(e) => setForm({ ...form, equipmentType: e.target.value })} /></label>
-      <label>Site<select required value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value })} disabled={user.role === 'site_supervisor'}>{siteOptions.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
+      <label>Site<select value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value })} disabled={user.role === 'site_supervisor'}><option value="">Inventory (no site)</option>{siteOptions.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
       <label>Ownership<select value={form.ownership} onChange={(e) => setForm({ ...form, ownership: e.target.value as AssetPayload['ownership'] })}><option value="unknown">Unknown</option><option value="owned">Owned</option><option value="rental">Rental</option><option value="rpo">RPO</option></select></label>
       <label>Part Number<input value={form.partNumber} onChange={(e) => setForm({ ...form, partNumber: e.target.value })} /></label>
       <label>Serial Number<input value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} /></label>

@@ -72,6 +72,26 @@
   background: var(--accent);
 }
 
+/* On a phone the fixed 480px width anchored to the right edge pushes longer
+   messages off the left of the screen. Pin to both edges instead. */
+@media (max-width: 768px) {
+  .toaster {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    max-width: none;
+  }
+
+  .toast {
+    padding: 16px 18px;
+    gap: 12px;
+  }
+
+  .toast-msg {
+    font-size: 15px;
+  }
+}
+
 /* Slide in from the corner (off-screen right -> resting position). */
 @keyframes toast-in {
   from {

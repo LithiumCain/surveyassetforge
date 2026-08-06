@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { EMAIL_RE } from '../lib/validation';
 import { apiClient } from '../api/client';
 import { TopBar, type Tab } from '../components/TopBar';
 import { useToast } from '../components/Toast';
@@ -60,7 +61,9 @@ export const TeamPage = ({ user, onTab }: Props) => {
 
   const counts = useMemo(
     () => ({
-      total: team.length,
+      // Active-only, so this tile equals the three role tiles below it. Counting
+      // deactivated people here made the numbers visibly fail to add up.
+      total: team.filter((u) => u.isActive).length,
       admins: team.filter((u) => u.isActive && u.role === 'super_admin').length,
       directors: team.filter((u) => u.isActive && u.role === 'regional_director').length,
       supervisors: team.filter((u) => u.isActive && u.role === 'site_supervisor').length,
@@ -85,6 +88,10 @@ export const TeamPage = ({ user, onTab }: Props) => {
   const handleInvite = async () => {
     if (!inviteEmail || !inviteFirst || !inviteLast || !inviteSiteId) {
       toast.push('Fill in every invite field', 'error');
+      return;
+    }
+    if (!EMAIL_RE.test(inviteEmail.trim())) {
+      toast.push('Enter a valid email address', 'error');
       return;
     }
     setInviting(true);
@@ -116,6 +123,9 @@ export const TeamPage = ({ user, onTab }: Props) => {
         <article className="card kpi"><h2>{counts.admins}</h2><p>Super Admins</p></article>
         <article className="card kpi"><h2>{counts.directors}</h2><p>Directors</p></article>
         <article className="card kpi"><h2>{counts.supervisors}</h2><p>Site Supervisors</p></article>
+        {counts.inactive > 0 && (
+          <article className="card kpi"><h2>{counts.inactive}</h2><p>Deactivated</p></article>
+        )}
       </section>
 
       <section className="card">

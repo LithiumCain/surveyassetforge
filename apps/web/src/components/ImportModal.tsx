@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { parseWorkbook, type ParsedWorkbook } from '../lib/workbook';
+import { useModalDismiss } from '../lib/useModalDismiss';
 import { useToast } from './Toast';
 
 type Props = {
@@ -18,6 +19,12 @@ export const ImportModal = ({ onImported, onClose }: Props) => {
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const toast = useToast();
+
+  // Escape closes — except mid-import, where abandoning the modal would leave the
+  // remaining chunks unsent with no way to tell what landed.
+  useModalDismiss(useCallback(() => {
+    if (phase !== 'importing') onClose();
+  }, [phase, onClose]));
 
   const perSite = useMemo(() => {
     if (!parsed) return [];

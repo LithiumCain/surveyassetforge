@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Asset, Site } from '../types';
+import { parseDateOnly } from '../lib/date';
 
 type Props = {
   assets: Asset[];
@@ -28,8 +29,7 @@ export const RegionalAlerts = ({ assets, sites, onAddSite }: Props) => {
       if (!asset.nextCalibrationDue) continue;
       if (!asset.siteId || !activeSiteIds.has(asset.siteId)) continue;
 
-      const dueDate = new Date(asset.nextCalibrationDue);
-      dueDate.setHours(0, 0, 0, 0);
+      const dueDate = parseDateOnly(asset.nextCalibrationDue);
       const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / DAY_MS);
 
       let bucket: keyof SiteBucket | null = null;

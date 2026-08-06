@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useModalDismiss } from '../lib/useModalDismiss';
 import { apiClient } from '../api/client';
 import { Asset, AssignPayload } from '../types';
 
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export const AssignModal = ({ asset, onAssigned, onClose }: Props) => {
+  useModalDismiss(onClose);
   const [form, setForm] = useState<AssignPayload>({
     assignedToName: '',
     assignedToNumber: null,

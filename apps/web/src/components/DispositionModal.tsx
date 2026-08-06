@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react';
+import { useModalDismiss } from '../lib/useModalDismiss';
 import { apiClient } from '../api/client';
 import { useToast } from './Toast';
 import { Asset, DispositionStatus } from '../types';
@@ -17,6 +18,7 @@ const OPTIONS: { value: DispositionStatus; label: string }[] = [
 ];
 
 export const DispositionModal = ({ asset, onDisposed, onClose }: Props) => {
+  useModalDismiss(onClose);
   const toast = useToast();
   const [status, setStatus] = useState<DispositionStatus>('written_off');
   const [notes, setNotes] = useState('');

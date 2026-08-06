@@ -83,10 +83,18 @@ assignmentRoutes.post(
   authorize('super_admin', 'regional_director', 'site_supervisor'),
   async (req, res, next) => {
     try {
+      const equipment = await prisma.equipment.findFirst({
+        where: { id: req.params.assetId, organizationId: req.user!.organizationId },
+        select: { id: true, siteId: true },
+      });
+      if (!equipment) {
+        return res.status(404).json({ message: 'Asset not found' });
+      }
+
       const active = await prisma.assetAssignment.findFirst({
         where: {
           organizationId: req.user!.organizationId,
-          equipmentId: req.params.assetId,
+          equipmentId: equipment.id,
           checkedInAt: null,
         },
       });
@@ -94,7 +102,11 @@ assignmentRoutes.post(
         return res.status(404).json({ message: 'No active assignment found for this asset' });
       }
 
-      if (req.user!.role === 'site_supervisor' && req.user!.siteId !== active.siteId) {
+      // Authorize against the asset's CURRENT site, not the site recorded when it
+      // was checked out — an asset moved between sites since checkout would
+      // otherwise stay writable by the old site's supervisor and be unreachable
+      // by the new one's.
+      if (req.user!.role === 'site_supervisor' && req.user!.siteId !== equipment.siteId) {
         return res.status(403).json({ message: 'Cannot check in assets outside your site' });
       }
 
@@ -147,14 +159,24 @@ assignmentRoutes.get('/assets/:assetId/assignments', async (req, res, next) => {
   }
 });
 
-// ── All currently active assignments (manager view) ──────────────
+// ── All currently active assignments ─────────────────────────────
+// Supervisors need this too: the dashboard decides check-out vs check-in per row
+// from it, so without it their rows all render as "available". They see only
+// their own site's equipment — scoped by the asset's CURRENT site, matching the
+// per-asset checks elsewhere in this file.
 assignmentRoutes.get(
   '/assignments/active',
-  authorize('super_admin', 'regional_director'),
+  authorize('super_admin', 'regional_director', 'site_supervisor'),
   async (req, res, next) => {
     try {
       const assignments = await prisma.assetAssignment.findMany({
-        where: { organizationId: req.user!.organizationId, checkedInAt: null },
+        where: {
+          organizationId: req.user!.organizationId,
+          checkedInAt: null,
+          ...(req.user!.role === 'site_supervisor'
+            ? { equipment: { siteId: req.user!.siteId } }
+            : {}),
+        },
         include: {
           assignedBy: { select: { firstName: true, lastName: true, email: true } },
           equipment: { select: { assetNumber: true, itemName: true } },

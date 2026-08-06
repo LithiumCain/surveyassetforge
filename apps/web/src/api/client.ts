@@ -96,10 +96,6 @@ class ApiClient {
     return this.request(`/assets/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
   }
 
-  deleteAsset(id: string): Promise<void> {
-    return this.request(`/assets/${id}`, { method: 'DELETE' });
-  }
-
   disposeAsset(id: string, payload: DispositionPayload): Promise<void> {
     return this.request(`/assets/${id}`, {
       method: 'DELETE',
@@ -148,6 +144,17 @@ class ApiClient {
     const CHUNK = 800;
     let created = 0;
     let skipped = 0;
+
+    // With no asset rows the loop below never runs, so the sites would never be
+    // sent while the caller still reported success. Send them on their own.
+    if (payload.assets.length === 0) {
+      const result = await this.request<{ sites: number; created: number; skipped: number }>(
+        '/import/workbook',
+        { method: 'POST', body: JSON.stringify({ sites: payload.sites, assets: [] }) },
+      );
+      return { sites: result.sites, created: 0, skipped: 0 };
+    }
+
     for (let i = 0; i < payload.assets.length; i += CHUNK) {
       const result = await this.request<{ sites: number; created: number; skipped: number }>(
         '/import/workbook',

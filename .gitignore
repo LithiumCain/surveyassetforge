@@ -8,3 +8,7 @@ coverage
 .DS_Store
 .vercel
 *.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc

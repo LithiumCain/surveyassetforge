@@ -1,4 +1,6 @@
 import { FormEvent, useState } from 'react';
+import { useModalDismiss } from '../lib/useModalDismiss';
+import { EMAIL_RE } from '../lib/validation';
 import { apiClient } from '../api/client';
 import { CreateSitePayload, Site } from '../types';
 
@@ -20,7 +22,6 @@ const US_STATES: [string, string][] = [
 
 const STEPS = ['Identity', 'Location', 'Manager', 'Review'] as const;
 const LAST_STEP = STEPS.length - 1;
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 type Props = {
   // inviteNote is an optional human message about the manager invitation outcome.
@@ -29,6 +30,7 @@ type Props = {
 };
 
 export const CreateSiteModal = ({ onCreated, onClose }: Props) => {
+  useModalDismiss(onClose);
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<CreateSitePayload>({
     code: '',

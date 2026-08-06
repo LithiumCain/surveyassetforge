@@ -1,6 +1,8 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { useModalDismiss } from '../lib/useModalDismiss';
 import { apiClient } from '../api/client';
 import { compressImage } from '../lib/image';
+import { formatDateOnly } from '../lib/date';
 import { useToast } from './Toast';
 import { Asset, CalibrationRecord } from '../types';
 
@@ -12,10 +14,10 @@ type Props = {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-const fmt = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const fmt = formatDateOnly;
 
 export const CalibrationModal = ({ asset, onLogged, onClose }: Props) => {
+  useModalDismiss(onClose);
   const toast = useToast();
   const [history, setHistory] = useState<CalibrationRecord[]>([]);
   const [loading, setLoading] = useState(true);

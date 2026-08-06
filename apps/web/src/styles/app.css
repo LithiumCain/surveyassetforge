@@ -557,23 +557,14 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
 
 
 /* ================================================================
-   CONFIRM / UNDO / STATUS STRIPS
+   STATUS STRIP
    ================================================================ */
 
-.confirm-strip,
-.undo-strip,
 .status-strip {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-}
-
-.confirm-actions { display: flex; gap: 10px; }
-
-.undo-strip {
-  background: linear-gradient(135deg, #f0f7ff, #e8f2fb);
-  border-color: #bed4e9;
 }
 
 .status-strip {
@@ -631,8 +622,7 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
   grid-column: 1 / -1;
 }
 
-.form-grid label,
-.field-label {
+.form-grid label {
   display: grid;
   gap: 5px;
   font-size: 10px;
@@ -643,9 +633,7 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
 }
 
 .form-grid label input,
-.form-grid label select,
-.field-label input,
-.field-label select {
+.form-grid label select {
   margin-top: 0;
   font-size: 14px;
 }
@@ -705,22 +693,6 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
   height: 1px;
   background: var(--border);
   margin: 2px 0;
-}
-
-.login-btn {
-  width: 100%;
-  padding: 12px;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  border-radius: 10px;
-}
-
-.login-footer {
-  text-align: center;
-  font-size: 11px;
-  color: var(--muted);
-  letter-spacing: 0.04em;
 }
 
 
@@ -1334,10 +1306,7 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
   .location-toolbar { grid-template-columns: 1fr; }
   .location-meta { flex-wrap: wrap; }
 
-  .confirm-strip,
-  .undo-strip,
-  .status-strip,
-  .confirm-actions {
+  .status-strip {
     flex-direction: column;
     align-items: stretch;
   }

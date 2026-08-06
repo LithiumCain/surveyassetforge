@@ -21,7 +21,20 @@ export const app = express();
 app.set('trust proxy', 1);
 
 app.use(helmet());
-app.use(cors());
+
+// Restrict browser callers to our own frontend when WEB_ORIGIN is configured.
+// Unset stays permissive so local dev and curl keep working.
+const allowedOrigins = (process.env.WEB_ORIGIN ?? '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+app.use(
+  cors(
+    allowedOrigins.length
+      ? { origin: allowedOrigins, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] }
+      : {},
+  ),
+);
 // Image uploads (base64 data URLs) need more headroom than the default 100kb.
 // Scope the larger limit to the uploads path so other routes stay tight.
 app.use('/api/v1/uploads', express.json({ limit: '8mb' }));

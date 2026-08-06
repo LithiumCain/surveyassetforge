@@ -7,13 +7,12 @@
     "apps/web"
   ],
   "scripts": {
-    "bootstrap:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/bootstrap_local_stack.ps1",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
-    "db:migrate": "bash ./scripts/db_migrate.sh",
-    "db:reset": "bash ./scripts/db_reset.sh",
+    "db:migrate": "npm run db:migrate -w @hartsystem/api",
+    "db:seed": "npm run db:seed -w @hartsystem/api",
     "dev": "npm run dev -w @hartsystem/api & npm run dev -w @hartsystem/web",
-    "dev:stack": "npm run db:up && npm run db:migrate && npm run dev",
+    "dev:stack": "npm run db:up && npm run db:migrate && npm run db:seed && npm run dev",
     "build": "npm run build -w @hartsystem/api && npm run build -w @hartsystem/web",
     "lint": "npm run lint -w @hartsystem/api && npm run lint -w @hartsystem/web"
   },

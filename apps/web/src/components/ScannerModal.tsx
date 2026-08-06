@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useModalDismiss } from '../lib/useModalDismiss';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 type Props = {
@@ -31,6 +32,7 @@ const scanBox = (viewfinderWidth: number, viewfinderHeight: number) => ({
 });
 
 export const ScannerModal = ({ onScan, onClose }: Props) => {
+  useModalDismiss(onClose);
   const [error, setError] = useState<string | null>(null);
   const [torchOn, setTorchOn] = useState(false);
   const [torchAvailable, setTorchAvailable] = useState(false);

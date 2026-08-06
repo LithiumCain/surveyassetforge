@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../api/client';
 import { downloadCsv } from '../lib/csv';
+import { formatDateOnly } from '../lib/date';
 import { TopBar, type Tab } from '../components/TopBar';
 import { useToast } from '../components/Toast';
 import { Asset, Site, User } from '../types';
@@ -15,8 +16,11 @@ const EOL_DAYS = 1095; // 36 months, straight-line depreciation horizon
 const APPROACHING_DAYS = 900; // ~30 months — start flagging for replacement
 
 const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
-const fmtDate = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+const fmtDate = formatDateOnly;
+
+// Synthetic per-site row for assets with no site. Counted in the table, but it is
+// not a location.
+const INVENTORY_ROW = 'Inventory (unassigned)';
 
 const daysInService = (acquired: string | null): number | null =>
   acquired ? Math.floor((Date.now() - new Date(acquired).getTime()) / DAY_MS) : null;
@@ -26,15 +30,28 @@ export const ReportsPage = ({ user, onTab }: Props) => {
   const [sites, setSites] = useState<Site[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
+    setError(null);
     Promise.all([apiClient.getSites(), apiClient.getAssets()])
       .then(([s, a]) => {
         setSites(s);
         setAssets(a);
       })
-      .catch((e) => toast.push(e instanceof Error ? e.message : 'Failed to load reports', 'error'))
+      .catch((e) => {
+        const message = e instanceof Error ? e.message : 'Failed to load reports';
+        // A toast alone disappears after a few seconds and leaves an all-zero
+        // report on screen, which reads as real data.
+        setError(message);
+        toast.push(message, 'error');
+      })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -66,7 +83,7 @@ export const ReportsPage = ({ user, onTab }: Props) => {
     }));
     if (inventory.length) {
       rows.push({
-        name: 'Inventory (unassigned)',
+        name: INVENTORY_ROW,
         count: inventory.length,
         overdue: inventory.filter((a) => a.calibrationStatus === 'overdue').length,
         dueSoon: inventory.filter((a) => a.calibrationStatus === 'due_soon' || a.calibrationStatus === 'warning').length,
@@ -127,13 +144,22 @@ export const ReportsPage = ({ user, onTab }: Props) => {
         <section className="card">
           <p>Loading reports…</p>
         </section>
+      ) : error ? (
+        <section className="card empty-state">
+          <h3>Couldn&apos;t load reports</h3>
+          <p className="error">{error}</p>
+          <div className="actions" style={{ justifyContent: 'center', marginTop: 14 }}>
+            <button onClick={load}>Try again</button>
+          </div>
+        </section>
       ) : (
         <>
           <section className="summary-grid">
             <article className="card"><h2>{summary.total}</h2><p>Total Assets</p></article>
             <article className="card"><h2>{summary.overdue}</h2><p>Overdue Calibration</p></article>
             <article className="card"><h2>{summary.dueSoon}</h2><p>Due Soon</p></article>
-            <article className="card"><h2>{siteRows.length}</h2><p>Active Locations</p></article>
+            {/* siteRows carries a synthetic "Inventory (unassigned)" row; it is not a location. */}
+            <article className="card"><h2>{siteRows.filter((r) => r.name !== INVENTORY_ROW).length}</h2><p>Active Locations</p></article>
             <article className="card"><h2>{money(summary.totalCost)}</h2><p>Total Cost</p></article>
             <article className="card"><h2>{money(summary.totalValue)}</h2><p>Current Value</p></article>
           </section>

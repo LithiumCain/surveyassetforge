@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { exportAssetsCsv } from '../lib/csv';
 import { TopBar, type Tab } from '../components/TopBar';
@@ -12,13 +12,27 @@ import { CustodyHistory } from '../components/CustodyHistory';
 import { DispositionModal } from '../components/DispositionModal';
 import { ImportModal } from '../components/ImportModal';
 import { RegionalAlerts } from '../components/RegionalAlerts';
-import { ScannerModal } from '../components/ScannerModal';
+// html5-qrcode is ~334 kB and only needed once someone taps Scan. Loading it on
+// demand keeps the initial payload small on a phone over field cellular.
+const ScannerModal = lazy(() =>
+  import('../components/ScannerModal').then((m) => ({ default: m.ScannerModal })),
+);
 import { useToast } from '../components/Toast';
 import { Asset, AssetAssignment, AssetPayload, Site, User } from '../types';
 
 type Props = {
   user: User;
   onTab: (tab: Tab) => void;
+};
+
+// Triage order for "Sort by → Status". Alphabetical order puts overdue below ok,
+// which is the opposite of what the sort is for.
+const CALIBRATION_RANK: Record<string, number> = {
+  overdue: 0,
+  due_soon: 1,
+  warning: 2,
+  never_calibrated: 3,
+  ok: 4,
 };
 
 export const DashboardPage = ({ user, onTab }: Props) => {
@@ -49,6 +63,9 @@ export const DashboardPage = ({ user, onTab }: Props) => {
   const [bulkEdit, setBulkEdit] = useState(false);
   const formAnchorRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
+
+  // Mirrors POST /sites, which is super_admin + regional_director only.
+  const canManageSites = user.role === 'super_admin' || user.role === 'regional_director';
 
   const siteCounts = useMemo(() => {
     return assets.reduce<Record<string, number>>((counts, asset) => {
@@ -96,18 +113,25 @@ export const DashboardPage = ({ user, onTab }: Props) => {
     );
   }, [visibleAssets]);
 
+  // Site + category filters applied, status filter NOT. The KPI tiles set the status
+  // filter, so deriving their counts from the status-filtered list would make every
+  // other tile collapse to zero the moment one is clicked.
+  const scopedAssets = useMemo(
+    () =>
+      visibleAssets.filter(
+        (asset) => equipmentFilter === 'all' || asset.equipmentType === equipmentFilter,
+      ),
+    [visibleAssets, equipmentFilter],
+  );
+
   const filteredAssets = useMemo(() => {
-    const results = visibleAssets.filter((asset) => {
+    const results = scopedAssets.filter((asset) => {
       if (statusFilter !== 'all') {
         const matchesCalibration = asset.calibrationStatus === statusFilter;
         const matchesDamage = asset.damageStatus === statusFilter;
         if (!matchesCalibration && !matchesDamage) {
           return false;
         }
-      }
-
-      if (equipmentFilter !== 'all' && asset.equipmentType !== equipmentFilter) {
-        return false;
       }
 
       return true;
@@ -122,7 +146,11 @@ export const DashboardPage = ({ user, onTab }: Props) => {
         case 'itemNameDesc':
           return right.itemName.localeCompare(left.itemName);
         case 'statusAsc':
-          return left.calibrationStatus.localeCompare(right.calibrationStatus) || left.assetNumber.localeCompare(right.assetNumber);
+          return (
+            (CALIBRATION_RANK[left.calibrationStatus] ?? 99) -
+              (CALIBRATION_RANK[right.calibrationStatus] ?? 99) ||
+            left.assetNumber.localeCompare(right.assetNumber)
+          );
         case 'costDesc':
           return Number(right.cost ?? 0) - Number(left.cost ?? 0);
         case 'costAsc':
@@ -138,7 +166,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
           return left.assetNumber.localeCompare(right.assetNumber);
       }
     });
-  }, [equipmentFilter, sortBy, statusFilter, visibleAssets]);
+  }, [scopedAssets, sortBy, statusFilter]);
 
   const selectedSiteName = useMemo(() => {
     if (!selectedSiteId) {
@@ -150,37 +178,47 @@ export const DashboardPage = ({ user, onTab }: Props) => {
 
   const summary = useMemo(() => {
     return {
-      total: filteredAssets.length,
-      overdue: filteredAssets.filter((a) => a.calibrationStatus === 'overdue').length,
-      dueSoon: filteredAssets.filter((a) => a.calibrationStatus === 'due_soon').length,
-      underRepair: filteredAssets.filter((a) => a.damageStatus === 'under_repair').length,
-      totalCost: filteredAssets.reduce((sum, a) => sum + Number(a.cost ?? 0), 0),
-      currentValue: filteredAssets.reduce((sum, a) => sum + Number(a.currentValue ?? 0), 0),
+      total: scopedAssets.length,
+      overdue: scopedAssets.filter((a) => a.calibrationStatus === 'overdue').length,
+      dueSoon: scopedAssets.filter((a) => a.calibrationStatus === 'due_soon').length,
+      underRepair: scopedAssets.filter((a) => a.damageStatus === 'under_repair').length,
+      totalCost: scopedAssets.reduce((sum, a) => sum + Number(a.cost ?? 0), 0),
+      currentValue: scopedAssets.reduce((sum, a) => sum + Number(a.currentValue ?? 0), 0),
     };
-  }, [filteredAssets]);
+  }, [scopedAssets]);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ initial = false }: { initial?: boolean } = {}) => {
+    // Only blank the table on the very first load. Post-save refreshes keep the
+    // current rows on screen instead of flashing "Loading assets…" over them.
+    if (initial) setLoading(true);
     setError(null);
     try {
-      const [siteRows, assetRows] = await Promise.all([apiClient.getSites(), apiClient.getAssets()]);
+      const [siteRows, assetRows, assignmentRows] = await Promise.all([
+        apiClient.getSites(),
+        apiClient.getAssets(),
+        apiClient.getActiveAssignments(),
+      ]);
       setSites(siteRows);
       setAssets(assetRows);
-
-      if (user.role === 'super_admin' || user.role === 'regional_director') {
-        const assignmentRows = await apiClient.getActiveAssignments();
-        setActiveAssignments(Object.fromEntries(assignmentRows.map((a) => [a.assetId, a])));
-      }
+      setActiveAssignments(Object.fromEntries(assignmentRows.map((a) => [a.assetId, a])));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
-      setLoading(false);
+      if (initial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    void loadData();
+    void loadData({ initial: true });
   }, []);
+
+  // A category chosen at one site may not exist at the next; without this the
+  // select renders blank and the table reads "no assets found".
+  useEffect(() => {
+    if (equipmentFilter !== 'all' && !equipmentTypes.includes(equipmentFilter)) {
+      setEquipmentFilter('all');
+    }
+  }, [equipmentTypes, equipmentFilter]);
 
   useEffect(() => {
     if (user.role === 'site_supervisor') {
@@ -308,19 +346,48 @@ export const DashboardPage = ({ user, onTab }: Props) => {
       <section className="card scan-box">
         <h3>Scan Lookup</h3>
         <p>Scan a barcode or QR code with your camera, or type the asset number.</p>
-        <div className="inline-controls">
-          <input value={scanInput} onChange={(e) => setScanInput(e.target.value)} placeholder="Asset number" />
-          <button type="button" onClick={() => void handleScanLookup()}>Lookup</button>
+        {/* A form, so hardware barcode wedges (which type the code then Enter) and the
+            phone keyboard's "Go" key both trigger the lookup. */}
+        <form
+          className="inline-controls"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleScanLookup();
+          }}
+        >
+          <input
+            value={scanInput}
+            onChange={(e) => {
+              setScanInput(e.target.value);
+              setScanResult(null);
+            }}
+            placeholder="Asset number"
+          />
+          <button type="submit">Lookup</button>
           <button type="button" className="secondary-button" onClick={() => setScannerOpen(true)}>Scan</button>
-        </div>
+        </form>
         {scanResult && (
           <p className="scan-result">
-            Found: <strong>{scanResult.assetNumber}</strong> - {scanResult.itemName} ({scanResult.siteName})
+            Found: <strong>{scanResult.assetNumber}</strong> - {scanResult.itemName} (
+            {scanResult.siteName ?? 'Inventory'})
           </p>
         )}
       </section>
 
-      {!loading && assets.length === 0 && (
+      {/* Must come before the empty state: a failed load leaves assets at [], and
+          showing "no assets yet" for what is really a network error tells the
+          customer their fleet is empty. */}
+      {!loading && error && (
+        <section className="card empty-state">
+          <h3>Couldn&apos;t load your fleet</h3>
+          <p className="error">{error}</p>
+          <div className="actions" style={{ justifyContent: 'center', marginTop: 14 }}>
+            <button onClick={() => void loadData({ initial: true })}>Try again</button>
+          </div>
+        </section>
+      )}
+
+      {!loading && !error && assets.length === 0 && (
         <section className="card empty-state">
           <h3>Let&apos;s get your fleet in here</h3>
           <p className="subtle">
@@ -331,7 +398,9 @@ export const DashboardPage = ({ user, onTab }: Props) => {
             {user.role === 'super_admin' && (
               <button onClick={() => setImportOpen(true)}>Import your workbook</button>
             )}
-            <button className="secondary-button" onClick={() => setCreateSiteOpen(true)}>Add a site</button>
+            {canManageSites && (
+              <button className="secondary-button" onClick={() => setCreateSiteOpen(true)}>Add a site</button>
+            )}
             {(user.role === 'super_admin' || user.role === 'site_supervisor') && (
               <button className="secondary-button" onClick={() => { setEditing(undefined); setFormOpen(true); }}>
                 Add one asset
@@ -348,19 +417,22 @@ export const DashboardPage = ({ user, onTab }: Props) => {
             <h3>Locations</h3>
             <p>Break down workbook-backed assets by site.</p>
           </div>
-          {user.role === 'site_supervisor' && (
+          {canManageSites && (
             <button onClick={() => setCreateSiteOpen(true)}>+ Add Site</button>
           )}
         </div>
         <div className="location-toolbar">
-          <label className="location-select">
-            <span>Search Sites</span>
-            <input
-              value={siteSearchTerm}
-              onChange={(e) => setSiteSearchTerm(e.target.value)}
-              placeholder="Search Sites"
-            />
-          </label>
+          {/* Only filters the site picker below, which supervisors don't get. */}
+          {user.role !== 'site_supervisor' && (
+            <label className="location-select">
+              <span>Search Sites</span>
+              <input
+                value={siteSearchTerm}
+                onChange={(e) => setSiteSearchTerm(e.target.value)}
+                placeholder="Search Sites"
+              />
+            </label>
+          )}
           {user.role !== 'site_supervisor' && (
             <label className="location-select">
               <span>Filter by Site</span>
@@ -541,14 +613,22 @@ export const DashboardPage = ({ user, onTab }: Props) => {
       )}
 
       {scannerOpen && (
-        <ScannerModal
-          onScan={(text) => {
-            setScannerOpen(false);
-            setScanInput(text);
-            void handleScanLookup(text);
-          }}
-          onClose={() => setScannerOpen(false)}
-        />
+        <Suspense
+          fallback={
+            <div className="modal-overlay">
+              <div className="modal"><p>Starting camera…</p></div>
+            </div>
+          }
+        >
+          <ScannerModal
+            onScan={(text) => {
+              setScannerOpen(false);
+              setScanInput(text);
+              void handleScanLookup(text);
+            }}
+            onClose={() => setScannerOpen(false)}
+          />
+        </Suspense>
       )}
 
       {createSiteOpen && (

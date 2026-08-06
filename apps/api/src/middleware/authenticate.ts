@@ -19,17 +19,32 @@ const VALID_ROLES = new Set<UserRole>(['super_admin', 'regional_director', 'site
 // A placeholder org is "unclaimed" and may be linked to a real Clerk org later.
 const SEED_ORG_PREFIX = 'org_seed_';
 
-// Optional allowlist. When set, it gates every provisioning path that CLAIMS
-// tenancy (JIT auto-provisioning, linking/creating an org from a Clerk org).
-// Membership in an already-linked org is exempt — an org admin explicitly
-// added that user. Unset = no restriction (dev).
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Origins allowed to mint the session tokens we accept. Comma-separated; when
+// unset, any token from this Clerk instance verifies (fine in dev).
+const authorizedParties = (process.env.CLERK_AUTHORIZED_PARTIES ?? process.env.WEB_ORIGIN ?? '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+// Allowlist gating every provisioning path that CLAIMS tenancy — JIT
+// auto-provisioning, and linking or creating an org from a Clerk org.
+// Membership in an already-linked org is exempt: an org admin explicitly
+// added that user.
 const jitAllowedEmails = (process.env.CLERK_JIT_ALLOWED_EMAILS ?? '')
   .split(',')
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
 
-const passesAllowlist = (email: string | null): boolean =>
-  jitAllowedEmails.length === 0 || (!!email && jitAllowedEmails.includes(email.toLowerCase()));
+// Fails CLOSED in production. Claiming tenancy grants super_admin over an
+// organization's data, so an unset allowlist has to mean "nobody" rather than
+// "everybody" — otherwise any Clerk sign-up can adopt an existing tenant.
+// Outside production an empty allowlist stays permissive for local work.
+const canClaimTenancy = (email: string | null): boolean => {
+  if (jitAllowedEmails.length === 0) return !isProduction;
+  return !!email && jitAllowedEmails.includes(email.toLowerCase());
+};
 
 type LocalUser = {
   id: string;
@@ -50,11 +65,24 @@ const denied = (clerkUserId: string, email: string | null, reason: string): null
 // Pull name + email + invitation metadata from Clerk (best-effort; safe defaults
 // on any failure). publicMetadata carries the saf_* fields we stamp onto an
 // invitation so an invited user lands with the right role + site.
+// Only VERIFIED addresses count. Email is the key used to reclaim an existing
+// user row, so an unverified address would let anyone claim another person's
+// account by adding their address to a Clerk profile.
+const verifiedEmailOf = (cu: {
+  primaryEmailAddress?: { emailAddress: string; verification?: { status?: string } | null } | null;
+  emailAddresses?: { emailAddress: string; verification?: { status?: string } | null }[];
+}): string | null => {
+  const isVerified = (e?: { verification?: { status?: string } | null } | null) =>
+    e?.verification?.status === 'verified';
+  if (isVerified(cu.primaryEmailAddress)) return cu.primaryEmailAddress!.emailAddress;
+  return (cu.emailAddresses ?? []).find(isVerified)?.emailAddress ?? null;
+};
+
 const fetchClerkProfile = async (clerkUserId: string): Promise<ClerkProfile> => {
   try {
     const cu = await clerk.users.getUser(clerkUserId);
     return {
-      email: cu.primaryEmailAddress?.emailAddress ?? cu.emailAddresses[0]?.emailAddress ?? null,
+      email: verifiedEmailOf(cu),
       firstName: cu.firstName ?? cu.username ?? null,
       lastName: cu.lastName ?? null,
       meta: (cu.publicMetadata ?? {}) as Record<string, unknown>,
@@ -115,14 +143,24 @@ const reclaimOrCreateUser = async (
   profile: ClerkProfile,
 ): Promise<LocalUser> => {
   if (profile.email) {
-    const stale = await prisma.user.findFirst({
+    // User.email carries no unique constraint, so take the match only when it is
+    // unambiguous — picking "newest of several" would bind an identity to an
+    // arbitrary row, and that row's role is inherited wholesale below.
+    const matches = await prisma.user.findMany({
       where: {
         organizationId,
         isActive: true,
         email: { equals: profile.email, mode: 'insensitive' },
       },
       orderBy: { createdAt: 'desc' },
+      take: 2,
     });
+    if (matches.length > 1) {
+      console.warn(
+        `[auth] refusing to relink ${clerkUserId}: ${matches.length}+ active users share ${profile.email}`,
+      );
+    }
+    const stale = matches.length === 1 ? matches[0] : null;
     if (stale) {
       console.info(`[auth] relinking user ${stale.id} (${profile.email}) to new Clerk id ${clerkUserId}`);
       return prisma.user.update({
@@ -161,8 +199,8 @@ const resolveOrgForMembership = async (
   const linked = await prisma.organization.findUnique({ where: { clerkOrgId: clerkOrg.id } });
   if (linked) return linked;
 
-  // Everything below claims tenancy, so the allowlist (when set) applies.
-  if (!passesAllowlist(email)) return null;
+  // Everything below claims tenancy, so the allowlist applies.
+  if (!canClaimTenancy(email)) return null;
 
   if (clerkOrg.slug) {
     const bySlug = await prisma.organization.findUnique({ where: { slug: clerkOrg.slug } });
@@ -281,19 +319,20 @@ const resolveLocalUser = async (clerkUserId: string): Promise<LocalUser | null> 
   const org = await prisma.organization.findUnique({ where: { slug: jitSlug } });
   if (!org) return denied(clerkUserId, profile.email, `JIT org "${jitSlug}" not found`);
 
-  if (!passesAllowlist(profile.email)) {
+  if (!canClaimTenancy(profile.email)) {
     return denied(clerkUserId, profile.email, 'email not on CLERK_JIT_ALLOWED_EMAILS');
   }
 
   // Validate the configured JIT role — a typo'd env value must not produce a
-  // broken row (or a silently wrong privilege level).
+  // broken row, and must never fail open to a higher privilege level.
   const configured = process.env.CLERK_JIT_ROLE;
-  let role: UserRole = 'super_admin'; // documented dev default
+  let role: UserRole = 'super_admin'; // dev default: first user owns the demo org
   if (configured) {
     if (VALID_ROLES.has(configured as UserRole)) {
       role = configured as UserRole;
     } else {
-      console.warn(`[auth] invalid CLERK_JIT_ROLE "${configured}" — using super_admin`);
+      console.warn(`[auth] invalid CLERK_JIT_ROLE "${configured}" — falling back to site_supervisor`);
+      role = 'site_supervisor';
     }
   }
   return reclaimOrCreateUser(clerkUserId, org.id, role, null, profile);
@@ -306,7 +345,9 @@ export const authenticate = async (
 ): Promise<void> => {
   try {
     // --- Dev-only test shim (automated testing): DEV_AUTH=1 + x-dev-user header.
-    if (process.env.DEV_AUTH === '1' && req.header('x-dev-user')) {
+    // Never available in production: it accepts a plaintext header in place of a
+    // token, and the seeded user IDs it takes are published in the repo.
+    if (!isProduction && process.env.DEV_AUTH === '1' && req.header('x-dev-user')) {
       const user = await prisma.user.findUnique({
         where: { clerkUserId: req.header('x-dev-user')! },
       });
@@ -340,7 +381,12 @@ export const authenticate = async (
 
     let claims: { sub: string };
     try {
-      claims = (await verifyToken(token, { secretKey })) as typeof claims;
+      // authorizedParties pins tokens to our own frontend origins. Without it any
+      // token minted for any app on the same Clerk instance verifies here.
+      claims = (await verifyToken(token, {
+        secretKey,
+        ...(authorizedParties.length ? { authorizedParties } : {}),
+      })) as typeof claims;
     } catch {
       res.status(401).json({ message: 'Invalid or expired session' });
       return;

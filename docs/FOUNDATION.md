@@ -38,7 +38,9 @@ SQL tables are generated from it via Prisma Migrate).
   `org:admin` → `super_admin`), then the JIT env fallback. Full details and
   troubleshooting in `docs/CLERK_PROVISIONING.md`.
 - A dev-only test shim remains behind `DEV_AUTH=1` + an `x-dev-user` header
-  (a seeded `clerkUserId`) for local/automated testing.
+  (a seeded `clerkUserId`) for local/automated testing. It is hard-disabled when
+  `NODE_ENV=production` — it accepts a plaintext header in place of a token, and
+  the seeded IDs it takes are published in this repo.
 
 ## Audit logging
 
@@ -48,8 +50,11 @@ actor, action, entity, old→new value, IP, and user-agent — all org-scoped.
 
 ## Soft delete
 
-Equipment is never hard-deleted. `DELETE /assets/:id` sets `status = archived`;
-lists exclude archived items. History is preserved for compliance.
+Equipment is never hard-deleted. `DELETE /assets/:id` is a **disposition**: the
+caller supplies a terminal status (`sold`, `lost`, `stolen`, `written_off`) plus
+optional notes, and the route records it. Asset lists filter to `status: 'active'`,
+so a disposed item drops out of the fleet while its custody, calibration, and
+audit history are preserved for compliance.
 
 ## Database workflow (against a Neon branch)
 
@@ -61,8 +66,8 @@ npx prisma migrate dev      # create/apply migrations from schema.prisma
 npx prisma db seed          # load the fictional "Faeheart Survey Co" demo data
 ```
 
-The seed (`prisma/seed.ts`) is idempotent and 100% fictional — 1 org, 3 sites,
-5 users (one per role), ~15 equipment items across every calibration state.
+The seed (`prisma/seed.ts`) is idempotent and 100% fictional — 1 org, 4 sites
+(3 active + 1 inactive), 5 users, ~15 equipment items across every calibration state.
 
 ## Running the API locally (dev shim)
 
@@ -76,8 +81,14 @@ DEV_AUTH=1 npx tsx src/server.ts          # http://localhost:4000
 
 ## Still pending (next steps)
 
-1. Wire real Clerk session verification into `authenticate` (replace the shim).
-2. Add Clerk sign-in + organization context to `apps/web`.
-3. Provision a production Neon database and run migrations there.
-4. UX polish pass (loading/empty states, toasts, branded 404/500).
-5. Update the root `README.md` (still describes the old JWT design).
+1. Automated tests — there are none. CI typechecks, builds, and asserts the web
+   bundle contains application code, but nothing exercises behavior.
+2. Rate limiting. No limiter is registered; `POST /uploads/calibration-photo`
+   accepts an 8 MB body from any provisioned user and writes it to public blob
+   storage with no per-user quota.
+3. `xlsx@0.18.5` carries unfixed prototype-pollution and ReDoS advisories, and the
+   npm package is unmaintained (SheetJS distributes from its own CDN now). It runs
+   client-side on a file the user chose, so the blast radius is their own browser —
+   but it should be replaced or pinned to the vendor build before a wider rollout.
+4. Pagination — asset lists return the full set for the caller's scope.
+5. Firmware source sync.

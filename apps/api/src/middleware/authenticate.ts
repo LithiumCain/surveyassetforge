@@ -393,7 +393,17 @@ export const authenticate = async (
     }
 
     const user = await resolveLocalUser(claims.sub);
-    if (!user || !user.isActive) {
+    // Deactivated and never-provisioned are different problems with different
+    // fixes — telling a deactivated user to get added to the organization sends
+    // them (and whoever helps them) down the wrong path entirely.
+    if (user && !user.isActive) {
+      console.warn(`[auth] sign-in refused for deactivated user ${user.id} (clerk ${claims.sub})`);
+      res.status(401).json({
+        message: 'Your Survey Asset Forge account has been deactivated. Ask an administrator to reactivate it.',
+      });
+      return;
+    }
+    if (!user) {
       res.status(401).json({ message: 'Your account is not provisioned for Survey Asset Forge' });
       return;
     }

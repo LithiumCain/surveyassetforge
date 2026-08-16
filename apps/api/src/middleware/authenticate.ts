@@ -46,9 +46,17 @@ const jitAllowedEmails = (process.env.CLERK_JIT_ALLOWED_EMAILS ?? '')
 // organization's data, so an unset allowlist has to mean "nobody" rather than
 // "everybody" — otherwise any Clerk sign-up can adopt an existing tenant.
 // Outside production an empty allowlist stays permissive for local work.
+// An entry beginning with "@" matches a whole domain, so onboarding a customer
+// does not mean listing their staff one address at a time. The leading "@" is
+// required: matching on a bare "qcells.com" suffix would also accept
+// "evil-qcells.com".
 const canClaimTenancy = (email: string | null): boolean => {
   if (jitAllowedEmails.length === 0) return !isProduction;
-  return !!email && jitAllowedEmails.includes(email.toLowerCase());
+  if (!email) return false;
+  const lower = email.toLowerCase();
+  return jitAllowedEmails.some((entry) =>
+    entry.startsWith('@') ? lower.endsWith(entry) : entry === lower,
+  );
 };
 
 type LocalUser = {

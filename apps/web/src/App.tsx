@@ -81,10 +81,12 @@ const AuthedApp = () => {
           <div style={{ textAlign: 'center' }}>
             <h3 style={{ marginTop: 0 }}>We couldn&apos;t load your account</h3>
             <p>{error ?? 'Your account is not set up yet.'}</p>
+            {/* The API message above names the actual cause and the next step. Don't
+                append generic advice here — "ask an administrator to add this email"
+                is wrong for, say, an invitation that was never accepted. */}
             {email ? (
               <p style={{ color: 'var(--muted, #64748b)', fontSize: '0.9rem' }}>
-                You&apos;re signed in as <strong>{email}</strong>. Ask an administrator to add
-                this email to your company&apos;s organization, then try again.
+                You&apos;re signed in as <strong>{email}</strong>.
               </p>
             ) : null}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12 }}>

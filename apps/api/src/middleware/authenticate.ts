@@ -70,9 +70,38 @@ type LocalUser = {
 
 const asString = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
 
-const denied = (clerkUserId: string, email: string | null, reason: string): null => {
-  console.warn(`[auth] provisioning denied for ${clerkUserId} (${email ?? 'no email'}): ${reason}`);
+// Why provisioning refused. The server has always known this; it used to go only
+// to the logs, which meant the person staring at the sign-in screen — and whoever
+// was helping them — had to guess between several unrelated causes.
+type DenialCode = 'no_membership' | 'org_not_linked' | 'email_not_allowed' | 'org_missing';
+
+type Denial = { code?: DenialCode };
+
+const denied = (
+  clerkUserId: string,
+  email: string | null,
+  code: DenialCode,
+  detail: string,
+  out: Denial,
+): null => {
+  console.warn(`[auth] provisioning denied for ${clerkUserId} (${email ?? 'no email'}): ${detail}`);
+  out.code = code;
   return null;
+};
+
+// Safe to show the signed-in user: it describes their own account state and
+// names the next action, without revealing anything about other tenants.
+const DENIAL_MESSAGE: Record<DenialCode, string> = {
+  no_membership:
+    "You're not a member of any organization yet. If you were sent an invitation, open it and accept " +
+    'it first — an unaccepted invitation does not grant access.',
+  org_not_linked:
+    "Your organization isn't set up in Survey Asset Forge yet. An administrator needs to enable it before " +
+    'anyone from your company can sign in.',
+  email_not_allowed:
+    'Your email address is not permitted to create a new company. Ask an administrator to add you to an ' +
+    'existing organization, or to allow your email domain.',
+  org_missing: 'The organization this account points at no longer exists. An administrator needs to re-create it.',
 };
 
 // Pull name + email + invitation metadata from Clerk (best-effort; safe defaults
@@ -269,7 +298,7 @@ const resolveOrgForMembership = async (
 //      (dashboard or app) is the canonical way to grant access.
 //   3. Dev JIT fallback via CLERK_JIT_ORG_SLUG.
 // Anything else is denied.
-const resolveLocalUser = async (clerkUserId: string): Promise<LocalUser | null> => {
+const resolveLocalUser = async (clerkUserId: string, out: Denial): Promise<LocalUser | null> => {
   const existing = await prisma.user.findUnique({ where: { clerkUserId } });
 
   if (existing) {
@@ -296,7 +325,14 @@ const resolveLocalUser = async (clerkUserId: string): Promise<LocalUser | null> 
   const invitedOrgSlug = asString(meta.saf_org_slug);
   if (invitedRole && invitedOrgSlug && VALID_ROLES.has(invitedRole)) {
     const org = await prisma.organization.findUnique({ where: { slug: invitedOrgSlug } });
-    if (!org) return denied(clerkUserId, profile.email, `invited org "${invitedOrgSlug}" not found`);
+    if (!org)
+      return denied(
+        clerkUserId,
+        profile.email,
+        'org_missing',
+        `invited org "${invitedOrgSlug}" not found`,
+        out,
+      );
 
     // Only accept a site that actually belongs to the invited org (guards
     // against tampered metadata pointing at another tenant's site).
@@ -330,19 +366,35 @@ const resolveLocalUser = async (clerkUserId: string): Promise<LocalUser | null> 
     return denied(
       clerkUserId,
       profile.email,
+      'org_not_linked',
       `member of ${memberships.length} Clerk org(s) but none could be linked (allowlist?)`,
+      out,
     );
   }
 
   // --- 3. Dev JIT fallback: auto-provision into the demo org.
   const jitSlug = process.env.CLERK_JIT_ORG_SLUG;
-  if (!jitSlug) return denied(clerkUserId, profile.email, 'no Clerk org membership and JIT is off');
+  if (!jitSlug)
+    return denied(
+      clerkUserId,
+      profile.email,
+      'no_membership',
+      'no Clerk org membership and JIT is off',
+      out,
+    );
 
   const org = await prisma.organization.findUnique({ where: { slug: jitSlug } });
-  if (!org) return denied(clerkUserId, profile.email, `JIT org "${jitSlug}" not found`);
+  if (!org)
+    return denied(clerkUserId, profile.email, 'org_missing', `JIT org "${jitSlug}" not found`, out);
 
   if (!canClaimTenancy(profile.email)) {
-    return denied(clerkUserId, profile.email, 'email not on CLERK_JIT_ALLOWED_EMAILS');
+    return denied(
+      clerkUserId,
+      profile.email,
+      'email_not_allowed',
+      'email not on CLERK_JIT_ALLOWED_EMAILS',
+      out,
+    );
   }
 
   // Validate the configured JIT role — a typo'd env value must not produce a
@@ -414,7 +466,8 @@ export const authenticate = async (
       return;
     }
 
-    const user = await resolveLocalUser(claims.sub);
+    const denial: Denial = {};
+    const user = await resolveLocalUser(claims.sub, denial);
     // Deactivated and never-provisioned are different problems with different
     // fixes — telling a deactivated user to get added to the organization sends
     // them (and whoever helps them) down the wrong path entirely.
@@ -426,7 +479,12 @@ export const authenticate = async (
       return;
     }
     if (!user) {
-      res.status(401).json({ message: 'Your account is not provisioned for Survey Asset Forge' });
+      res.status(401).json({
+        message: denial.code
+          ? DENIAL_MESSAGE[denial.code]
+          : 'Your account is not provisioned for Survey Asset Forge',
+        code: denial.code ?? 'not_provisioned',
+      });
       return;
     }
 

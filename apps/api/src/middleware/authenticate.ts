@@ -21,6 +21,11 @@ const SEED_ORG_PREFIX = 'org_seed_';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Allow a first-time sign-in to adopt the lone unclaimed seed org (see
+// resolveOrgForMembership). Only turn this on while deliberately re-linking an
+// existing tenant after a Clerk instance change.
+const adoptSeedOrg = process.env.CLERK_ORG_ADOPT_SEED === '1';
+
 // Origins allowed to mint the session tokens we accept. Comma-separated; when
 // unset, any token from this Clerk instance verifies (fine in dev).
 const authorizedParties = (process.env.CLERK_AUTHORIZED_PARTIES ?? process.env.WEB_ORIGIN ?? '')
@@ -215,10 +220,19 @@ const resolveOrgForMembership = async (
 
   // Exactly one unclaimed (seed-placeholder) org in the DB → adopt it, so a
   // fresh install / migrated instance attaches to its existing data.
-  const placeholders = await prisma.organization.findMany({
-    where: { clerkOrgId: { startsWith: SEED_ORG_PREFIX } },
-    take: 2,
-  });
+  //
+  // Opt-in only. This is a one-time migration aid, but it fires on an ordinary
+  // request: a genuinely NEW tenant signing in for the first time would silently
+  // land inside the seeded demo org and see its equipment instead of getting a
+  // clean organization. Onboarding a new customer is the common case now and
+  // re-linking after a Clerk instance move is the rare one, so the default is to
+  // create a new tenant and adoption has to be asked for.
+  const placeholders = adoptSeedOrg
+    ? await prisma.organization.findMany({
+        where: { clerkOrgId: { startsWith: SEED_ORG_PREFIX } },
+        take: 2,
+      })
+    : [];
   if (placeholders.length === 1) {
     console.info(`[auth] linking org "${placeholders[0].slug}" to Clerk org ${clerkOrg.id} (sole unclaimed org)`);
     return prisma.organization.update({

@@ -175,7 +175,10 @@ siteRoutes.get(
           city: true,
           state: true,
           equipment: {
-            where: { status: 'active' },
+            // organizationId is redundant today (reached via an org-filtered site),
+            // but the FKs are single-column, so nothing in Postgres prevents an
+            // equipment row pointing at another tenant's site. Defense in depth.
+            where: { status: 'active', organizationId: orgId },
             select: { calibrationStatus: true, nextCalibrationDue: true },
           },
         },

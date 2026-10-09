@@ -244,14 +244,27 @@ const resolveOrgForMembership = async (
   // Everything below claims tenancy, so the allowlist applies.
   if (!canClaimTenancy(email)) return null;
 
-  if (clerkOrg.slug) {
+  // Relink by slug — ONLY an unclaimed placeholder, and only when adoption is
+  // explicitly enabled. This branch used to match any organization with the slug,
+  // including a live tenant with a real clerkOrgId, which let anyone who passed
+  // canClaimTenancy create a Clerk org with a customer's slug and have that
+  // customer's tenant repointed at them as super_admin. Domain allowlist entries
+  // (@customer.com) made that reachable by every address at the customer.
+  if (adoptSeedOrg && clerkOrg.slug) {
     const bySlug = await prisma.organization.findUnique({ where: { slug: clerkOrg.slug } });
-    if (bySlug) {
-      console.info(`[auth] linking org "${bySlug.slug}" to Clerk org ${clerkOrg.id} (slug match)`);
+    if (bySlug && bySlug.clerkOrgId.startsWith(SEED_ORG_PREFIX)) {
+      console.info(`[auth] linking unclaimed org "${bySlug.slug}" to Clerk org ${clerkOrg.id} (slug match)`);
       return prisma.organization.update({
         where: { id: bySlug.id },
         data: { clerkOrgId: clerkOrg.id },
       });
+    }
+    if (bySlug) {
+      console.warn(
+        `[auth] refusing to relink claimed org "${bySlug.slug}" to Clerk org ${clerkOrg.id} — ` +
+          'use scripts/tenant-doctor.ts --link',
+      );
+      return null;
     }
   }
 

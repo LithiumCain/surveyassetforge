@@ -15,6 +15,15 @@ export const assignmentRoutes = Router();
 
 assignmentRoutes.use(authenticate);
 
+// The column is equipmentId; the web client keys custody state by assetId. These
+// endpoints used to return raw Prisma rows, so every lookup resolved to undefined
+// and the whole fleet rendered as "available" with no way to check anything back
+// in. Map it once, here, rather than relying on the client's cast to be honest.
+const toAssignmentDto = <T extends { equipmentId: string }>(row: T) => ({
+  ...row,
+  assetId: row.equipmentId,
+});
+
 // ── Check out a piece of equipment to a person ───────────────────
 assignmentRoutes.post(
   '/assets/:assetId/assign',
@@ -70,7 +79,7 @@ assignmentRoutes.post(
         newValue: parsed.data.assignedToName,
       });
 
-      return res.status(201).json(assignment);
+      return res.status(201).json(toAssignmentDto(assignment));
     } catch (err) {
       next(err);
     }
@@ -123,7 +132,7 @@ assignmentRoutes.post(
         oldValue: active.assignedToName,
       });
 
-      return res.json(updated);
+      return res.json(toAssignmentDto(updated));
     } catch (err) {
       next(err);
     }
@@ -153,7 +162,7 @@ assignmentRoutes.get('/assets/:assetId/assignments', async (req, res, next) => {
       },
       orderBy: { checkedOutAt: 'desc' },
     });
-    return res.json(assignments);
+    return res.json(assignments.map(toAssignmentDto));
   } catch (err) {
     next(err);
   }
@@ -184,7 +193,7 @@ assignmentRoutes.get(
         },
         orderBy: { checkedOutAt: 'desc' },
       });
-      return res.json(assignments);
+      return res.json(assignments.map(toAssignmentDto));
     } catch (err) {
       next(err);
     }

@@ -90,7 +90,11 @@ const toDto = (e: EquipmentWithSite) => {
     lastCalibrationDate: toDateOnly(e.lastCalibrationDate),
     calibrationIntervalDays: e.calibrationIntervalDays,
     nextCalibrationDue: toDateOnly(e.nextCalibrationDue),
-    calibrationStatus: e.calibrationStatus,
+    // Derived on every read, never taken from the stored column. That column is
+    // only written when someone edits the asset, so an untouched asset kept the
+    // status it had at its last write — an instrument 191 days past due still
+    // read "ok", and every count, filter, report and export agreed with it.
+    calibrationStatus: computeCalibrationStatus(toDateOnly(e.nextCalibrationDue)),
     damageStatus: e.damageStatus,
     damageType: e.damageType,
     assetNotes: e.assetNotes,

@@ -13,6 +13,13 @@ const photoSchema = z.object({
 const DATA_URL_RE = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/;
 const MAX_BYTES = 6 * 1024 * 1024; // generous ceiling; client downscales well below this
 
+// Raster formats only. The pattern above also matches image/svg+xml, and an SVG
+// served from a public blob URL runs script when opened — the stored link would
+// then hand that script to whoever reviews the calibration. The web client always
+// sends JPEG, and the declared type is what the blob is served as, so a payload
+// mislabelled as JPEG is served as an inert image.
+const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
 export const uploadRoutes = Router();
 
 uploadRoutes.use(authenticate);
@@ -33,7 +40,10 @@ uploadRoutes.post('/uploads/calibration-photo', async (req, res, next) => {
     if (!match) {
       return res.status(400).json({ message: 'Invalid image data' });
     }
-    const contentType = match[1];
+    const contentType = match[1].toLowerCase();
+    if (!ALLOWED_TYPES.has(contentType)) {
+      return res.status(415).json({ message: 'Photos must be JPEG, PNG or WebP' });
+    }
     const buffer = Buffer.from(match[2], 'base64');
     if (buffer.length === 0) {
       return res.status(400).json({ message: 'Empty image' });

@@ -35,7 +35,12 @@ siteRoutes.get('/sites', authenticate, async (req, res, next) => {
       return res.json(sites);
     }
 
-    if (req.user!.role === 'site_supervisor' && req.user!.siteId) {
+    if (req.user!.role === 'site_supervisor') {
+      // A supervisor with no site yet (the landing state for a new Clerk org
+      // member) has no sites — an empty list, not a 403. The dashboard loads
+      // sites, assets and assignments together, so a 403 here blanked the whole
+      // screen for someone whose assets and assignments loaded fine.
+      if (!req.user!.siteId) return res.json([]);
       const sites = await prisma.site.findMany({
         where: { organizationId: orgId, id: req.user!.siteId },
       });

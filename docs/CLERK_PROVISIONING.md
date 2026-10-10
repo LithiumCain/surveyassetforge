@@ -3,51 +3,97 @@
 "Provisioned" means the API has a row in its own `users` table linked to your
 Clerk identity (`clerkUserId`). Signing in through Clerk proves who you are;
 provisioning decides whether you belong to a licensed organization and what
-role you hold. The screen **"Your account is not provisioned for Survey Asset
-Forge"** means Clerk verified you fine, but no provisioning path matched.
+role you hold. Clerk is only the identity provider — the app keeps its own
+`organizations` table, and a Clerk organization grants nothing until a local
+organization is linked to it.
+
+When provisioning fails, the sign-in screen states the reason and the next step
+(for example, "accept your invitation first"), and the API logs an
+`[auth] provisioning denied ...` line with the same detail.
 
 ## The three provisioning paths (checked in order)
 
-1. **Invitation (`saf_*` metadata).** Users invited through the app carry
-   `saf_role` / `saf_org_slug` / `saf_site_id` in their Clerk `publicMetadata`
-   (stamped on the invitation). They land with exactly the invited role and
+1. **Invitation (`saf_*` metadata).** Users invited through the app (Team page →
+   *Invite site supervisor*) carry `saf_role` / `saf_org_slug` / `saf_site_id`
+   in their Clerk `publicMetadata`. They land with exactly the invited role and
    site. Always honored, even when the allowlist is set.
 
 2. **Clerk organization membership** *(the canonical way)*. Add a user to your
-   company's **Organization in the Clerk dashboard** (or via the app) and they
-   are provisioned on their next request:
-   - Clerk org role `org:admin` → `super_admin`
-   - custom Clerk roles named after SAF roles (e.g. `org:site_supervisor`)
-     map directly
-   - any other role (incl. `org:member`) → `regional_director`
+   company's **Organization in the Clerk dashboard** and they are provisioned on
+   their next request:
+   - `org:admin` → `super_admin`
+   - custom Clerk roles named after SAF roles map directly:
+     `org:regional_director`, `org:site_supervisor`
+   - **anything else, including Clerk's default `org:member` →
+     `site_supervisor` with no site**, which sees unassigned inventory only.
+     Give them a site or a wider role on the Team page.
 
-   The Clerk org is matched to a local organization by `clerkOrgId`. If no org
-   is linked yet, the API will **claim** one automatically (allowlist-gated,
-   see below): first by matching slug, then by adopting the sole unclaimed
-   (seed-placeholder) org, and finally by creating a brand-new tenant that
-   mirrors the Clerk org.
+   > Members used to default to `regional_director` — fleet-wide read of every
+   > asset, cost and site, plus creating sites and inviting people. Wider access
+   > is now granted deliberately, never by default.
 
-3. **JIT fallback (`CLERK_JIT_ORG_SLUG`).** Any signed-in user is dropped into
-   that org with `CLERK_JIT_ROLE` (default `super_admin`). Dev convenience;
-   allowlist-gated in production.
+   A Clerk invitation is **not** a membership until the recipient opens it and
+   accepts. An unaccepted invitation grants nothing.
+
+3. **JIT fallback (`CLERK_JIT_ORG_SLUG`).** Signed-in users with no organization
+   are dropped into that org with `CLERK_JIT_ROLE` (default `super_admin`).
+   Development convenience; allowlist-gated in production.
+
+## Granting access to a director
+
+Either:
+
+- create a custom role named `regional_director` in Clerk (Organizations →
+  Roles) and assign it when adding the member, **or**
+- add them as an ordinary member, then set their role on the app's Team page.
+
+## Linking an organization
+
+A Clerk organization with no local counterpart is a new tenant. On the first
+sign-in from it, the API creates a matching local organization — provided the
+person signing in passes the allowlist below. After that, every member of that
+Clerk organization is provisioned without the allowlist being consulted.
+
+The API **never** relinks an existing, claimed organization to a different Clerk
+organization on its own; doing so on an ordinary sign-in let anyone take over a
+tenant by creating a Clerk org with its slug. To repoint an organization
+deliberately (for example after moving Clerk instances), use:
+
+```bash
+DATABASE_URL='<url>' npm exec -w @hartsystem/api -- tsx scripts/tenant-doctor.ts                     # read-only
+DATABASE_URL='<url>' npm exec -w @hartsystem/api -- tsx scripts/tenant-doctor.ts \
+  --link --clerk-org org_xxx --name "Company" --slug company                                       # write
+```
+
+Adopting the seeded placeholder organization on first sign-in is available only
+with `CLERK_ORG_ADOPT_SEED=1`, and only while it is still unclaimed.
 
 ## The allowlist (`CLERK_JIT_ALLOWED_EMAILS`)
 
-Comma-separated emails. When set, it gates every path that **claims tenancy**:
-JIT provisioning, and linking/creating an organization from a Clerk org.
-Membership in an **already-linked** org is exempt — an org admin explicitly
-added that member, which is the trust signal we want.
+Comma-separated, case-insensitive. Entries are full addresses or whole domains
+written with a leading `@`:
+
+```
+CLERK_JIT_ALLOWED_EMAILS=@yourcompany.com,partner@example.com
+```
+
+It gates **creating** a company — JIT provisioning and linking a new Clerk
+organization — not joining one. Membership in an already-linked organization is
+exempt; an org admin explicitly added that member.
+
+**In production an empty allowlist means nobody may create a company.** That is
+deliberate: creating one grants `super_admin` over it.
 
 ## Moving from a Clerk development instance to production
 
 Switching instances (pk_test/sk_test → pk_live/sk_live) gives **every user and
-organization a brand-new Clerk ID**. The API self-heals:
+organization a brand-new Clerk ID**.
 
-- **Organizations** re-link automatically the first time a member signs in
-  (slug match or sole-unclaimed-org adoption, allowlist-gated).
-- **Users** are reclaimed **by email**: if an active user row in the same org
-  has your email but a stale `clerkUserId`, it's relinked to your new identity,
-  preserving role, site scope, and audit history.
+- **Organizations** must be relinked deliberately with `tenant-doctor --link`
+  (see above).
+- **Users** are reclaimed **by verified email**: if exactly one active user row
+  in the same org has your email but a stale `clerkUserId`, it's relinked to your
+  new identity, preserving role, site scope, and audit history.
 
 Checklist when migrating:
 
@@ -55,22 +101,18 @@ Checklist when migrating:
    key. A pk/sk mismatch between web and API shows up as
    "Invalid or expired session".
 2. `surveyassetforge-web` (Vercel): set `VITE_CLERK_PUBLISHABLE_KEY` to the
-   **pk_live** key (and redeploy — Vite bakes env vars at build time).
-3. In the production Clerk dashboard, create your Organization and add your
-   team as members (admins get `super_admin`).
-4. If `CLERK_JIT_ALLOWED_EMAILS` is set, make sure it contains the emails of
-   whoever signs in **first** for each org (they trigger the org linking).
-   Everyone added to the org afterwards gets in without being on the list.
+   **pk_live** key and redeploy — Vite bakes env vars in at build time.
+3. In the production Clerk dashboard, create your Organization and add your team.
+4. Link the organization with `tenant-doctor --link`, or make sure whoever signs
+   in first is on `CLERK_JIT_ALLOWED_EMAILS`.
 
 ## Troubleshooting "not provisioned"
 
-The API logs a `[auth] provisioning denied ...` line (Vercel → Logs) with the
-exact reason for every denial:
-
-| Log reason | Fix |
+| Screen / log reason | Fix |
 |---|---|
-| `no Clerk org membership and JIT is off` | Add the user to your Clerk Organization (dashboard → Organizations → Members), or set `CLERK_JIT_ORG_SLUG`. |
-| `member of N Clerk org(s) but none could be linked (allowlist?)` | Their email isn't on `CLERK_JIT_ALLOWED_EMAILS` and no local org is linked to that Clerk org yet. Add their email to the allowlist (or have an allowlisted teammate sign in first to link the org). |
-| `email not on CLERK_JIT_ALLOWED_EMAILS` | Add the email (exact match, case-insensitive) to the env var and redeploy. |
-| `JIT org "…" not found` / `invited org "…" not found` | The org slug in the env var / invitation doesn't exist in the database. |
-| No denial logged, still 401 | The user row exists but `isActive` is false — reactivate it. |
+| Not a member of any organization (`no Clerk org membership and JIT is off`) | Add them to your Clerk Organization as a member — or, if they were invited, have them accept the invitation email. |
+| Organization isn't set up yet (`member of N Clerk org(s) but none could be linked`) | Their Clerk org has no local counterpart. Link it with `tenant-doctor --link`, or add a domain or address to `CLERK_JIT_ALLOWED_EMAILS` so their first sign-in creates it. |
+| Email not permitted to create a company (`email not on CLERK_JIT_ALLOWED_EMAILS`) | Add the address or its `@domain` to the allowlist and redeploy. |
+| Organization no longer exists | The org named by the invitation or `CLERK_JIT_ORG_SLUG` is missing from the database. |
+| "Your account has been deactivated" | Reactivate them on the Team page. |
+| Signed in, but sees only inventory and no sites | Expected for a new member: they are a site supervisor with no site. Assign a site or a role on the Team page. |

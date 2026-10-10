@@ -9,6 +9,7 @@ import {
   computeCalibrationStatus,
   computeCurrentValue,
   computeNextCalibrationDue,
+  futureCalibrationDateError,
   shouldRecommendReplacement,
 } from '../services/calibration.js';
 
@@ -47,10 +48,29 @@ const disposeSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 
+// The photo link is rendered as an <a href> that admins click when reviewing a
+// calibration. z.string().url() accepts any scheme — "javascript:" included — so
+// the lowest role could store a link that runs script in an admin's session and
+// promotes itself. Only https links to Vercel Blob, where the upload endpoint
+// puts photos, are accepted.
+const isTrustedPhotoUrl = (value: string): boolean => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname.endsWith('.blob.vercel-storage.com');
+  } catch {
+    return false;
+  }
+};
+
 const calibrationSchema = z.object({
   calibratedDate: z.string().date(),
   notes: z.string().max(500).optional().nullable(),
-  photoUrl: z.string().url().max(1000).optional().nullable(),
+  photoUrl: z
+    .string()
+    .max(1000)
+    .refine(isTrustedPhotoUrl, 'Photo must be uploaded through the app')
+    .optional()
+    .nullable(),
 });
 
 type EquipmentWithSite = Prisma.EquipmentGetPayload<{ include: { site: true } }>;
@@ -194,6 +214,10 @@ assetRoutes.post('/assets', authorize('super_admin', 'site_supervisor'), async (
       return res.status(400).json({ message: 'Invalid request body', issues: parsed.error.issues });
     }
     const data = parsed.data;
+    const futureDate = futureCalibrationDateError(data.lastCalibrationDate);
+    if (futureDate) {
+      return res.status(400).json({ message: futureDate });
+    }
 
     const resolved = await resolveSiteForWrite(req, data.siteId ?? null);
     if ('error' in resolved) {
@@ -264,6 +288,10 @@ assetRoutes.put('/assets/:id', authorize('super_admin', 'site_supervisor'), asyn
       return res.status(400).json({ message: 'Invalid request body', issues: parsed.error.issues });
     }
     const data = parsed.data;
+    const futureDate = futureCalibrationDateError(data.lastCalibrationDate);
+    if (futureDate) {
+      return res.status(400).json({ message: futureDate });
+    }
 
     const existing = await prisma.equipment.findFirst({
       where: { id: req.params.id, organizationId: req.user!.organizationId },
@@ -378,6 +406,10 @@ assetRoutes.post(
       const parsed = calibrationSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: 'Invalid request body', issues: parsed.error.issues });
+      }
+      const futureDate = futureCalibrationDateError(parsed.data.calibratedDate);
+      if (futureDate) {
+        return res.status(400).json({ message: futureDate });
       }
 
       const equipment = await prisma.equipment.findFirst({

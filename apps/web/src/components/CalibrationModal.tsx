@@ -2,7 +2,8 @@ import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { useModalDismiss } from '../lib/useModalDismiss';
 import { apiClient } from '../api/client';
 import { compressImage } from '../lib/image';
-import { formatDateOnly } from '../lib/date';
+import { formatDateOnly, localIsoDate } from '../lib/date';
+import { isSafeHttpsUrl } from '../lib/validation';
 import { useToast } from './Toast';
 import { Asset, CalibrationRecord } from '../types';
 
@@ -12,7 +13,7 @@ type Props = {
   onClose: () => void;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localIsoDate();
 
 const fmt = formatDateOnly;
 
@@ -154,7 +155,7 @@ export const CalibrationModal = ({ asset, onLogged, onClose }: Props) => {
                   <div className="custody-meta">
                     {rec.notes && <p className="custody-notes">{rec.notes}</p>}
                     {by && <p className="custody-by">Logged by {by}</p>}
-                    {rec.photoUrl && (
+                    {rec.photoUrl && isSafeHttpsUrl(rec.photoUrl) && (
                       <a href={rec.photoUrl} target="_blank" rel="noreferrer">View photo</a>
                     )}
                   </div>

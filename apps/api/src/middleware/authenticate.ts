@@ -157,13 +157,21 @@ const fetchClerkOrgMemberships = async (clerkUserId: string): Promise<ClerkOrgMe
 };
 
 // Map a Clerk organization role onto a SAF role. Custom Clerk roles named after
-// our roles (e.g. "org:site_supervisor") map directly; Clerk's built-in
-// "org:admin" becomes super_admin; everything else gets org-wide read/manage.
+// our roles (e.g. "org:regional_director") map directly, and Clerk's built-in
+// "org:admin" becomes super_admin.
+//
+// Everything else — including Clerk's default "org:member" — lands on the LEAST
+// privilege: site_supervisor with no site, which sees unassigned inventory only.
+// This used to fall back to regional_director, so anyone added to the Clerk org
+// by any means got fleet-wide read of every asset, cost and site, plus the power
+// to create sites and invite people. Granting more is now a deliberate step: give
+// them a site or a role on the Team page, or use a custom Clerk role.
 const clerkOrgRoleToSafRole = (clerkRole: string): UserRole => {
   const bare = clerkRole.replace(/^org:/, '');
   if (VALID_ROLES.has(bare as UserRole)) return bare as UserRole;
   if (bare === 'admin') return 'super_admin';
-  return 'regional_director';
+  console.info(`[auth] Clerk role "${clerkRole}" maps to site_supervisor with no site — assign one on the Team page`);
+  return 'site_supervisor';
 };
 
 type ClerkProfile = {

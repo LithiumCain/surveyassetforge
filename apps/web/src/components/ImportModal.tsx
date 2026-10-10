@@ -150,6 +150,14 @@ export const ImportModal = ({ onImported, onClose }: Props) => {
                   ` ${parsed.duplicates} duplicate asset number${parsed.duplicates !== 1 ? 's' : ''} (listed on two sheets) will keep their first sheet only.`}
               </p>
             )}
+            {parsed.futureCalibrationDates > 0 && (
+              <p className="error">
+                Last Calibration dates in the future: {parsed.futureCalibrationDates}. These are
+                usually a typo, or the next-due date in the wrong column. Those assets will import
+                with no calibration date, so they show as needing calibration rather than as in
+                tolerance — log the real date on each asset after the import.
+              </p>
+            )}
             <div className="import-sites">
               {perSite.map((s) => (
                 <div key={s.code} className="import-site-row">

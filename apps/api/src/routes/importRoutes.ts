@@ -4,7 +4,11 @@ import { prisma } from '../lib/prisma.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
 import { auditFromRequest } from '../services/audit.js';
-import { computeCalibrationStatus, computeNextCalibrationDue } from '../services/calibration.js';
+import {
+  computeCalibrationStatus,
+  computeNextCalibrationDue,
+  futureCalibrationDateError,
+} from '../services/calibration.js';
 
 // Bulk workbook import. The client parses the Excel workbook locally and sends
 // normalized rows; the server upserts sites and inserts equipment, skipping
@@ -63,6 +67,17 @@ importRoutes.post('/import/workbook', authorize('super_admin'), async (req, res,
     }
     const { sites, assets } = parsed.data;
     const organizationId = req.user!.organizationId;
+
+    // The web client drops future calibration dates while parsing and reports
+    // them in the preview, so this only fires for an outdated client or a direct
+    // API call — reject loudly, naming the asset, rather than store a date that
+    // would show the instrument as in tolerance until long after it is due.
+    for (const a of assets) {
+      const futureDate = futureCalibrationDateError(a.lastCalibrationDate);
+      if (futureDate) {
+        return res.status(400).json({ message: `${a.assetNumber}: ${futureDate}` });
+      }
+    }
 
     // Upsert sites by (org, code) so a re-import refreshes names, never
     // duplicates. Batched in one transaction — one network round trip instead

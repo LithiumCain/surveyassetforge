@@ -1,5 +1,6 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { Asset, AssetPayload, Site, User } from '../types';
+import { localIsoDate } from '../lib/date';
 
 type Props = {
   sites: Site[];
@@ -113,7 +114,7 @@ export const AssetForm = ({ sites, user, initial, onSubmit, onCancel }: Props) =
       <label>Firmware<input maxLength={128} value={form.firmwareVersion} onChange={(e) => setForm({ ...form, firmwareVersion: e.target.value })} /></label>
       <label>Latest Firmware<input maxLength={128} value={form.latestFirmwareVersion} onChange={(e) => setForm({ ...form, latestFirmwareVersion: e.target.value })} /></label>
       <label>Subscription End<input type="date" value={form.subscriptionEndDate} onChange={(e) => setForm({ ...form, subscriptionEndDate: e.target.value })} /></label>
-      <label>Last Calibration<input type="date" value={form.lastCalibrationDate} onChange={(e) => setForm({ ...form, lastCalibrationDate: e.target.value })} /></label>
+      <label>Last Calibration<input type="date" max={localIsoDate()} value={form.lastCalibrationDate} onChange={(e) => setForm({ ...form, lastCalibrationDate: e.target.value })} /></label>
       <label>Calibration Interval Days<input type="number" min={1} max={365} value={form.calibrationIntervalDays} onChange={(e) => setForm({ ...form, calibrationIntervalDays: Number(e.target.value) })} /></label>
       <label>Damage Status<select value={form.damageStatus} onChange={(e) => setForm({ ...form, damageStatus: e.target.value as AssetPayload['damageStatus'] })}><option value="ok">OK</option><option value="reported">Reported</option><option value="under_repair">Under Repair</option></select></label>
       <label>Damage Type<input value={form.damageType} onChange={(e) => setForm({ ...form, damageType: e.target.value })} /></label>

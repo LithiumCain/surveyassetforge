@@ -19,3 +19,11 @@ export const startOfToday = (): Date => {
   d.setHours(0, 0, 0, 0);
   return d;
 };
+
+// Today's date on the user's own calendar, as YYYY-MM-DD. Not
+// `new Date().toISOString().slice(0, 10)` — that is the UTC date, which in the
+// evening west of Greenwich is already tomorrow (pre-filling a future
+// calibration date) and in the morning east of it is still yesterday (so a date
+// picker capped at it refuses today).
+export const localIsoDate = (d: Date = new Date()): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

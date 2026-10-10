@@ -33,6 +33,7 @@ export type ParsedWorkbook = {
   purchases: ImportAsset[]; // "YYYY Purchase" sheet items (optional include)
   autoNumbered: number; // rows with gear but no Asset Number (we generate one)
   duplicates: number; // asset numbers listed on more than one sheet
+  futureCalibrationDates: number; // Last Calibration dates in the future, imported as "no date"
   skippedSheets: string[]; // non-site, non-purchase sheets (formula sheets etc.)
 };
 
@@ -130,6 +131,13 @@ export const parseWorkbook = async (file: File): Promise<ParsedWorkbook> => {
   const seenNumbers = new Set<string>();
   let autoNumbered = 0;
   let duplicates = 0;
+  let futureCalibrationDates = 0;
+  // Same cutoff the API enforces (tomorrow, UTC). A future "last calibration"
+  // is a typo, or the next-due date in the wrong column; importing it would show
+  // the instrument as in tolerance until long after it is due.
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() + 1);
+  const latestCalibrationDate = cutoff.toISOString().slice(0, 10);
 
   for (const sheetName of wb.SheetNames) {
     const match = sheetName.trim().match(SITE_SHEET);
@@ -184,6 +192,11 @@ export const parseWorkbook = async (file: File): Promise<ParsedWorkbook> => {
       seenNumbers.add(assetNumber);
 
       const cost = toMoney(row.K);
+      let lastCalibrationDate = toIsoDate(row.J);
+      if (lastCalibrationDate && lastCalibrationDate > latestCalibrationDate) {
+        futureCalibrationDates += 1;
+        lastCalibrationDate = null;
+      }
       assets.push({
         siteCode: code.trim(),
         assetNumber,
@@ -195,7 +208,7 @@ export const parseWorkbook = async (file: File): Promise<ParsedWorkbook> => {
         ownership: ownershipOf(row),
         firmwareVersion: text(row.I) || null,
         subscriptionEndDate: toIsoDate(row.H),
-        lastCalibrationDate: toIsoDate(row.J),
+        lastCalibrationDate,
         cost,
         replacementCost: toMoney(row.L) || cost,
         notes: text(row.N) || null,
@@ -257,5 +270,5 @@ export const parseWorkbook = async (file: File): Promise<ParsedWorkbook> => {
     });
   }
 
-  return { sites, assets, purchases, autoNumbered, duplicates, skippedSheets };
+  return { sites, assets, purchases, autoNumbered, duplicates, futureCalibrationDates, skippedSheets };
 };

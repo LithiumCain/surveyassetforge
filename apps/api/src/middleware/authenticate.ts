@@ -1,8 +1,10 @@
 import { NextFunction, Request, Response } from 'express';
 import { verifyToken } from '@clerk/backend';
 import { prisma } from '../lib/prisma.js';
+import { isClerkAPIResponseError } from '@clerk/backend/errors';
 import { clerk } from '../lib/clerk.js';
 import { AuthUser, UserRole } from '../types/auth.js';
+import { ClerkUserSnapshot, createAccessChecker, parseAccessMode } from '../services/clerkAccess.js';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -75,7 +77,9 @@ const asString = (v: unknown): string | null => (typeof v === 'string' && v ? v 
 // was helping them — had to guess between several unrelated causes.
 type DenialCode = 'no_membership' | 'org_not_linked' | 'email_not_allowed' | 'org_missing';
 
-type Denial = { code?: DenialCode };
+// `provisioned` is set when this request created (or relinked) the user from
+// Clerk, so their access was established moments ago and needs no re-check.
+type Denial = { code?: DenialCode; provisioned?: boolean };
 
 const denied = (
   clerkUserId: string,
@@ -336,6 +340,7 @@ const resolveLocalUser = async (clerkUserId: string, out: Denial): Promise<Local
     return existing;
   }
 
+  out.provisioned = true;
   const profile = await fetchClerkProfile(clerkUserId);
   const meta = profile.meta;
 
@@ -433,12 +438,77 @@ const resolveLocalUser = async (clerkUserId: string, out: Denial): Promise<Local
   return reclaimOrCreateUser(clerkUserId, org.id, role, null, profile);
 };
 
+// --- Ongoing access (see services/clerkAccess.ts). Removing someone from the
+// company's Clerk organization revokes their access within a few minutes.
+// CLERK_MEMBERSHIP_CHECK=report logs who would be revoked without enforcing;
+// =off disables the check (emergency kill switch).
+const statusOf = (err: unknown): number | null =>
+  isClerkAPIResponseError(err) ? err.status : null;
+
+const getClerkUserSnapshot = async (clerkUserId: string): Promise<ClerkUserSnapshot> => {
+  try {
+    const [cu, memberships] = await Promise.all([
+      clerk.users.getUser(clerkUserId),
+      clerk.users.getOrganizationMembershipList({ userId: clerkUserId, limit: 100 }),
+    ]);
+    return {
+      kind: 'found',
+      banned: Boolean(cu.banned),
+      email: verifiedEmailOf(cu),
+      meta: (cu.publicMetadata ?? {}) as Record<string, unknown>,
+      memberOrgIds: memberships.data.map((m) => m.organization.id),
+      membershipsComplete: memberships.totalCount <= memberships.data.length,
+    };
+  } catch (err) {
+    if (statusOf(err) === 404) return { kind: 'missing' };
+    return { kind: 'unavailable', detail: err instanceof Error ? err.message : String(err) };
+  }
+};
+
+const accessChecker = createAccessChecker(
+  {
+    loadOrg: (id) =>
+      prisma.organization.findUnique({ where: { id }, select: { id: true, slug: true, clerkOrgId: true } }),
+    getClerkUser: getClerkUserSnapshot,
+    clerkOrgExists: async (organizationId) => {
+      try {
+        await clerk.organizations.getOrganization({ organizationId });
+        return 'yes';
+      } catch (err) {
+        return statusOf(err) === 404 ? 'no' : 'unknown';
+      }
+    },
+    countActiveSuperAdmins: (organizationId) =>
+      prisma.user.count({ where: { organizationId, role: 'super_admin', isActive: true } }),
+    canClaimTenancy,
+    jitOrgSlug: process.env.CLERK_JIT_ORG_SLUG || null,
+    seedOrgPrefix: SEED_ORG_PREFIX,
+    validRoles: VALID_ROLES,
+  },
+  { mode: parseAccessMode(process.env.CLERK_MEMBERSHIP_CHECK) },
+);
+
+const REVOKED_MESSAGE = {
+  membership_removed:
+    "Your access to Survey Asset Forge has been removed — you're no longer a member of your company's " +
+    'organization. If that is a mistake, ask an administrator to add you back.',
+  account_removed:
+    'Your sign-in account has been removed or suspended. Ask an administrator if you need access.',
+} as const;
+
 export const authenticate = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
   try {
+    // Several routers are mounted on /api/v1 and each applies this middleware, so
+    // a request can pass through it more than once. Resolve the user once.
+    if (req.user) {
+      next();
+      return;
+    }
+
     // --- Dev-only test shim (automated testing): DEV_AUTH=1 + x-dev-user header.
     // Never available in production: it accepts a plaintext header in place of a
     // token, and the seeded user IDs it takes are published in the repo.
@@ -507,6 +577,22 @@ export const authenticate = async (
         code: denial.code ?? 'not_provisioned',
       });
       return;
+    }
+
+    const accessUser = {
+      id: user.id,
+      clerkUserId: claims.sub,
+      organizationId: user.organizationId,
+      role: user.role,
+    };
+    if (denial.provisioned) {
+      accessChecker.prime(accessUser);
+    } else {
+      const access = await accessChecker.check(accessUser);
+      if (!access.allow) {
+        res.status(401).json({ message: REVOKED_MESSAGE[access.reason], code: access.reason });
+        return;
+      }
     }
 
     req.user = {

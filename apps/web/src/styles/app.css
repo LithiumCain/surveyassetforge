@@ -715,7 +715,7 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
 
 .alert-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
 
@@ -755,6 +755,9 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
 
 .alert-card.due-now   { background: #fefce8; border-color: #fde047; color: #854d0e; }
 .alert-card.due-now h2 { color: #ca8a04; }
+
+.alert-card.no-record { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
+.alert-card.no-record h2 { color: #475569; }
 
 
 /* ================================================================
@@ -1311,7 +1314,7 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
     align-items: stretch;
   }
 
-  .alert-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .alert-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .alert-card { padding: 14px 8px 12px; }
   .alert-card h2 { font-size: 30px; }
   .alert-card span { display: none; }

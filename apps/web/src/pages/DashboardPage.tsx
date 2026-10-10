@@ -187,6 +187,12 @@ export const DashboardPage = ({ user, onTab }: Props) => {
     };
   }, [scopedAssets]);
 
+  // Whether the counts below describe real data. A failed first load leaves
+  // assets at [], and rendering that as "0 overdue" or an all-clear Fleet Alerts
+  // panel reports an empty fleet as a healthy one. A failed refresh keeps the
+  // last good rows, which are still worth showing.
+  const fleetLoaded = !loading && !(error && assets.length === 0);
+
   const loadData = async ({ initial = false }: { initial?: boolean } = {}) => {
     // Only blank the table on the very first load. Post-save refreshes keep the
     // current rows on screen instead of flashing "Loading assets…" over them.
@@ -309,7 +315,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
         )}
       </TopBar>
 
-      {(user.role === 'super_admin' || user.role === 'regional_director') && (
+      {fleetLoaded && (user.role === 'super_admin' || user.role === 'regional_director') && (
         <RegionalAlerts
           assets={assets}
           sites={sites}
@@ -317,6 +323,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
         />
       )}
 
+      {fleetLoaded && (
       <section className="summary-grid">
         <article className="card kpi" onClick={() => setStatusFilter('all')}>
           <h2>{summary.total}</h2><p>Total Assets</p>
@@ -342,6 +349,7 @@ export const DashboardPage = ({ user, onTab }: Props) => {
         <article className="card kpi"><h2>${Math.round(summary.totalCost).toLocaleString()}</h2><p>Total Cost</p></article>
         <article className="card kpi"><h2>${Math.round(summary.currentValue).toLocaleString()}</h2><p>Current Value</p></article>
       </section>
+      )}
 
       <section className="card scan-box">
         <h3>Scan Lookup</h3>

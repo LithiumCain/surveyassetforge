@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Asset, Site } from '../types';
-import { parseDateOnly } from '../lib/date';
+import { startOfToday } from '../lib/date';
+import { AlertBucket, CRITICAL_DAYS_OVERDUE, alertBucketFor } from '../lib/calibrationAlerts';
 
 type Props = {
   assets: Asset[];
@@ -8,49 +9,27 @@ type Props = {
   onAddSite: () => void;
 };
 
-const DAY_MS = 1000 * 60 * 60 * 24;
+type Counts = Record<AlertBucket, number>;
+
+const emptyCounts = (): Counts => ({ critical: 0, overdue: 0, upcoming: 0, noRecord: 0 });
 
 export const RegionalAlerts = ({ assets, sites, onAddSite }: Props) => {
-  const { critical, overdue, dueNow, siteAlerts } = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    let critical = 0;
-    let overdue = 0;
-    let dueNow = 0;
-
-    type SiteBucket = { critical: number; overdue: number; dueNow: number };
-    const siteMap: Record<string, SiteBucket> = {};
+  const { totals, siteAlerts } = useMemo(() => {
+    const today = startOfToday();
+    const totals = emptyCounts();
+    const siteMap: Record<string, Counts> = {};
 
     // Only count gear that lives at an active site (skip inactive sites + inventory).
     const activeSiteIds = new Set(sites.filter((s) => s.status !== 'inactive').map((s) => s.id));
 
     for (const asset of assets) {
-      if (!asset.nextCalibrationDue) continue;
       if (!asset.siteId || !activeSiteIds.has(asset.siteId)) continue;
 
-      const dueDate = parseDateOnly(asset.nextCalibrationDue);
-      const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / DAY_MS);
+      const bucket = alertBucketFor(asset, today);
+      if (!bucket) continue;
 
-      let bucket: keyof SiteBucket | null = null;
-
-      if (daysOverdue >= 90) {
-        critical++;
-        bucket = 'critical';
-      } else if (daysOverdue >= 30) {
-        overdue++;
-        bucket = 'overdue';
-      } else if (daysOverdue >= -30) {
-        dueNow++;
-        bucket = 'dueNow';
-      }
-
-      if (bucket) {
-        if (!siteMap[asset.siteId]) {
-          siteMap[asset.siteId] = { critical: 0, overdue: 0, dueNow: 0 };
-        }
-        siteMap[asset.siteId][bucket]++;
-      }
+      totals[bucket]++;
+      (siteMap[asset.siteId] ??= emptyCounts())[bucket]++;
     }
 
     const siteAlerts = Object.entries(siteMap)
@@ -63,13 +42,15 @@ export const RegionalAlerts = ({ assets, sites, onAddSite }: Props) => {
           city: site?.city ?? null,
           state: site?.state ?? null,
           ...counts,
-          total: counts.critical + counts.overdue + counts.dueNow,
+          total: counts.critical + counts.overdue + counts.upcoming + counts.noRecord,
         };
       })
-      .filter((s) => s.total > 0)
-      .sort((a, b) => b.critical - a.critical || b.total - a.total);
+      .sort(
+        (a, b) =>
+          b.critical - a.critical || b.overdue - a.overdue || b.total - a.total,
+      );
 
-    return { critical, overdue, dueNow, siteAlerts };
+    return { totals, siteAlerts };
   }, [assets, sites]);
 
   return (
@@ -84,19 +65,24 @@ export const RegionalAlerts = ({ assets, sites, onAddSite }: Props) => {
 
       <div className="alert-grid">
         <div className="alert-card critical">
-          <h2>{critical}</h2>
+          <h2>{totals.critical}</h2>
           <p>Critical</p>
-          <span>90+ days overdue</span>
+          <span>{CRITICAL_DAYS_OVERDUE}+ days overdue</span>
         </div>
         <div className="alert-card overdue">
-          <h2>{overdue}</h2>
+          <h2>{totals.overdue}</h2>
           <p>Overdue</p>
-          <span>30–90 days overdue</span>
+          <span>1–{CRITICAL_DAYS_OVERDUE - 1} days overdue</span>
         </div>
         <div className="alert-card due-now">
-          <h2>{dueNow}</h2>
-          <p>Due Now</p>
-          <span>Within 30-day window</span>
+          <h2>{totals.upcoming}</h2>
+          <p>Upcoming</p>
+          <span>Due within 30 days</span>
+        </div>
+        <div className="alert-card no-record">
+          <h2>{totals.noRecord}</h2>
+          <p>No Record</p>
+          <span>Never calibrated</span>
         </div>
       </div>
 
@@ -125,8 +111,11 @@ export const RegionalAlerts = ({ assets, sites, onAddSite }: Props) => {
                 {s.overdue > 0 && (
                   <span className="badge due_soon">{s.overdue} overdue</span>
                 )}
-                {s.dueNow > 0 && (
-                  <span className="badge warning">{s.dueNow} due now</span>
+                {s.upcoming > 0 && (
+                  <span className="badge warning">{s.upcoming} upcoming</span>
+                )}
+                {s.noRecord > 0 && (
+                  <span className="badge never_calibrated">{s.noRecord} no record</span>
                 )}
               </div>
             </div>

@@ -17,7 +17,7 @@ This repository is a full-stack monorepo (npm workspaces) for the FieldOps Asset
 
 ## Deployment
 Two Vercel projects, both Git-connected to `main` (auto-deploy on push):
-- `surveyassetforge-api` — Root Directory `apps/api`. Env: `DATABASE_URL`, `CLERK_SECRET_KEY`, `BLOB_READ_WRITE_TOKEN`, `WEB_ORIGIN`, `CLERK_JIT_ALLOWED_EMAILS`.
+- `surveyassetforge-api` — Root Directory `apps/api`. Env: `DATABASE_URL`, `CLERK_SECRET_KEY`, `BLOB_READ_WRITE_TOKEN`, `WEB_ORIGIN`, `CLERK_JIT_ALLOWED_EMAILS` (optional: `CLERK_MEMBERSHIP_CHECK=enforce|report|off`, see docs/CLERK_PROVISIONING.md).
 - `surveyassetforge-web` — Root Directory `apps/web` (Vite). Env: `VITE_API_BASE_URL` (the API's `/api/v1` URL) and `VITE_CLERK_PUBLISHABLE_KEY`.
 
 Database is Neon Postgres. Migrations are **not** run on deploy — apply them with

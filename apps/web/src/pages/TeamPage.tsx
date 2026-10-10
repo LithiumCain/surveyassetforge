@@ -30,6 +30,10 @@ export const TeamPage = ({ user, onTab }: Props) => {
   const [team, setTeam] = useState<TeamUser[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
+  // Kept separate from an empty team: a failed load used to leave the list at
+  // [] behind a toast, so the page read "0 Team Members" — as if everyone had
+  // been removed.
+  const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
 
   // Invite form (site supervisors — the app's own invite flow)
@@ -44,13 +48,14 @@ export const TeamPage = ({ user, onTab }: Props) => {
 
   const load = () => {
     setLoading(true);
+    setError(null);
     Promise.all([apiClient.getTeam(), apiClient.getSites()])
       .then(([users, siteRows]) => {
         setTeam(users);
         setSites(siteRows);
         if (!inviteSiteId && siteRows.length > 0) setInviteSiteId(siteRows[0].id);
       })
-      .catch((e) => toast.push(e instanceof Error ? e.message : 'Failed to load the team', 'error'))
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load the team'))
       .finally(() => setLoading(false));
   };
 
@@ -118,6 +123,7 @@ export const TeamPage = ({ user, onTab }: Props) => {
     <main className="layout">
       <TopBar user={user} tab="team" onTab={onTab} />
 
+      {!loading && !error && (
       <section className="summary-grid team-summary">
         <article className="card kpi"><h2>{counts.total}</h2><p>Team Members</p></article>
         <article className="card kpi"><h2>{counts.admins}</h2><p>Super Admins</p></article>
@@ -127,6 +133,7 @@ export const TeamPage = ({ user, onTab }: Props) => {
           <article className="card kpi"><h2>{counts.inactive}</h2><p>Deactivated</p></article>
         )}
       </section>
+      )}
 
       <section className="card">
         <div className="section-heading">
@@ -137,14 +144,14 @@ export const TeamPage = ({ user, onTab }: Props) => {
               {canEdit ? ' Changes save immediately.' : ' Only a Super Admin can make changes.'}
             </p>
           </div>
-          {canEdit && (
+          {canEdit && !loading && !error && (
             <button onClick={() => setInviteOpen((v) => !v)}>
               {inviteOpen ? 'Close invite' : '+ Invite site supervisor'}
             </button>
           )}
         </div>
 
-        {inviteOpen && (
+        {inviteOpen && !error && (
           <div className="invite-box">
             <div className="form-grid">
               <label>
@@ -176,13 +183,22 @@ export const TeamPage = ({ user, onTab }: Props) => {
             <p className="subtle" style={{ marginTop: 10 }}>
               They&apos;ll get an email, sign up, and land already scoped to that site as a
               Site Supervisor. To add admins or directors instead, add them to your company&apos;s
-              organization in Clerk — org admins arrive as Super Admins, members as Directors.
+              organization in Clerk — org admins arrive as Super Admins, members as Site
+              Supervisors with no site until you assign one here.
             </p>
           </div>
         )}
 
         {loading ? (
           <p className="subtle">Loading team…</p>
+        ) : error ? (
+          <div className="empty-state">
+            <h3>Couldn&apos;t load your team</h3>
+            <p className="error">{error}</p>
+            <div className="actions" style={{ justifyContent: 'center', marginTop: 14 }}>
+              <button onClick={load}>Try again</button>
+            </div>
+          </div>
         ) : (
           <div className="team-list">
             {team.map((member) => {

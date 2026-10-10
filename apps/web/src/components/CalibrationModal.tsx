@@ -22,6 +22,9 @@ export const CalibrationModal = ({ asset, onLogged, onClose }: Props) => {
   const toast = useToast();
   const [history, setHistory] = useState<CalibrationRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed load is not an empty history. Showing "No calibrations logged yet"
+  // for a network error tells an auditor the gear was never calibrated.
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [calibratedDate, setCalibratedDate] = useState(today());
   const [notes, setNotes] = useState('');
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
@@ -40,10 +43,11 @@ export const CalibrationModal = ({ asset, onLogged, onClose }: Props) => {
 
   const load = () => {
     setLoading(true);
+    setHistoryError(null);
     apiClient
       .getCalibrations(asset.id)
       .then(setHistory)
-      .catch((e) => toast.push(e instanceof Error ? e.message : 'Failed to load calibrations', 'error'))
+      .catch((e) => setHistoryError(e instanceof Error ? e.message : 'Failed to load calibration history'))
       .finally(() => setLoading(false));
   };
 
@@ -138,10 +142,16 @@ export const CalibrationModal = ({ asset, onLogged, onClose }: Props) => {
 
         <div className="custody-list" style={{ marginTop: 16 }}>
           {loading && <p className="subtle">Loading history…</p>}
-          {!loading && history.length === 0 && (
+          {!loading && historyError && (
+            <div>
+              <p className="error">Couldn&apos;t load calibration history: {historyError}</p>
+              <button type="button" className="secondary-button" onClick={load}>Try again</button>
+            </div>
+          )}
+          {!loading && !historyError && history.length === 0 && (
             <p className="subtle">No calibrations logged yet.</p>
           )}
-          {!loading &&
+          {!loading && !historyError &&
             history.map((rec) => {
               const by = rec.calibratedBy
                 ? [rec.calibratedBy.firstName, rec.calibratedBy.lastName].filter(Boolean).join(' ') ||

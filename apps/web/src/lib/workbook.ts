@@ -53,10 +53,20 @@ const text = (v: CellValue): string => {
 };
 
 // Excel serial → ISO date (1900 date system, matching the Python importer).
+// Valid serials run from 1 (1900-01-01) to 2958465 (9999-12-31). Anything else is
+// not a date and becomes null. Every number takes the numeric branch, so the
+// text-to-number hop below cannot loop: "0" used to skip it (0 > 0 is false),
+// fall through as the string "0", match the digits pattern, and call toIsoDate(0)
+// again forever — one zero in a date column killed the whole import. Out-of-range
+// serials either threw (1e11) or produced "+057342-11" (20250101) and 400'd their
+// entire chunk.
+const MAX_EXCEL_SERIAL = 2_958_465;
+
 const toIsoDate = (v: CellValue): string | null => {
   if (v === undefined || v === '') return null;
   if (v instanceof Date) return v.toISOString().slice(0, 10);
-  if (typeof v === 'number' && v > 0) {
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v) || v < 1 || v > MAX_EXCEL_SERIAL) return null;
     const ms = Date.UTC(1899, 11, 30) + Math.round(v) * 86_400_000;
     return new Date(ms).toISOString().slice(0, 10);
   }

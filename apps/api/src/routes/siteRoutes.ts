@@ -5,6 +5,7 @@ import { clerk } from '../lib/clerk.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
 import { auditFromRequest } from '../services/audit.js';
+import { computeCalibrationStatus, isoDate } from '../services/calibration.js';
 
 const createSiteSchema = z.object({
   name: z.string().min(2),
@@ -179,7 +180,7 @@ siteRoutes.get(
             // but the FKs are single-column, so nothing in Postgres prevents an
             // equipment row pointing at another tenant's site. Defense in depth.
             where: { status: 'active', organizationId: orgId },
-            select: { calibrationStatus: true, nextCalibrationDue: true },
+            select: { nextCalibrationDue: true },
           },
         },
         orderBy: { name: 'asc' },
@@ -192,11 +193,16 @@ siteRoutes.get(
           let dueNowCount = 0; // due soon / warning window
 
           for (const e of s.equipment) {
-            if (e.calibrationStatus === 'overdue') {
+            // Derived from the due date, not the stored column — see toDto in
+            // assetRoutes.ts for why the stored value goes stale.
+            const status = computeCalibrationStatus(
+              e.nextCalibrationDue ? isoDate(e.nextCalibrationDue) : null,
+            );
+            if (status === 'overdue') {
               const due = e.nextCalibrationDue ? e.nextCalibrationDue.getTime() : today;
               if (today - due > ninetyDaysMs) criticalCount += 1;
               else overdueCount += 1;
-            } else if (e.calibrationStatus === 'due_soon' || e.calibrationStatus === 'warning') {
+            } else if (status === 'due_soon' || status === 'warning') {
               dueNowCount += 1;
             }
           }
